@@ -94,7 +94,9 @@ wraps instead of overflowing and why the `...` menu is hidden.
 
 React remounts comment boxes, so the MutationObserver re-runs `inject`, which
 must stay idempotent, and `findTextarea` resolves the textarea at click time
-rather than injection time.
+rather than injection time. Its ancestor walk is the fallback for when
+`markdown-toolbar[for]` is absent, and it stops at `<body>` on purpose: failing
+closed beats grabbing an unrelated comment box.
 
 Text edits go through `document.execCommand("insertText")`. It is deprecated but
 is the only route that preserves the native undo stack and fires the events

@@ -195,13 +195,19 @@
   ];
   const OURS = new Set(BUTTONS.map((spec) => spec.key));
 
-  // Attributes that would make a cloned Bold button behave like Bold.
+  // Attributes that would make a cloned button behave like the one it copies.
+  // Bold carries only the first few, but ANCHOR's fallback can match another
+  // editor's Bold button, and an inherited handler is expensive to debug.
   const STRIP = [
     "data-md-button",
     "data-hotkey",
     "data-hotkey-scope",
     "data-analytics-event",
     "aria-labelledby",
+    "data-show-dialog-id",
+    "popovertarget",
+    "aria-controls",
+    "data-file-attachment-for",
   ];
 
   // The toolbar as GitHub first rendered it, captured before anything is moved.
@@ -221,6 +227,7 @@
     svg.setAttribute("width", "16");
     svg.setAttribute("height", "16");
     svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("fill", "currentColor");
     if (className) svg.setAttribute("class", className);
     else svg.style.cssText = ICON_CSS;
     const path = document.createElementNS(ns, "path");
@@ -234,7 +241,10 @@
   // manage and hide items it does: it hid almost the whole toolbar. We curate
   // the toolbar now, so override it outright. A stylesheet beats its inline
   // styles, and wrapping is a friendlier overflow than its kebab menu.
+  let styleEl = null;
+
   function installStyle() {
+    if (styleEl && styleEl.isConnected) return;
     const style = document.createElement("style");
     style.id = "gfm-tidy-style";
     style.textContent =
@@ -243,40 +253,39 @@
       `[${HIDDEN}]{display:none!important}` +
       `[${MANAGED}] ~ .ActionBar-more-menu{display:none!important}`;
     document.head.appendChild(style);
+    styleEl = style;
   }
 
-  // Every toolbar on the page, scoped through <markdown-toolbar> so the hot
-  // path is a tag-name lookup: ANCHOR alone has no fast path, so matching it
-  // against the whole document visited every element on every mutation.
+  // Every toolbar on the page. Both lookups are tag-name lookups, which are
+  // cheap; matching ANCHOR against the whole document is not, because an
+  // attribute-selector list has no fast path and visits every element. The
+  // second tag is the fallback for an editor that drops <markdown-toolbar>.
   function* containers() {
-    for (const toolbar of document.getElementsByTagName("markdown-toolbar")) {
-      const anchor = toolbar.querySelector(ANCHOR);
-      const slot = anchor && slotOf(anchor);
-      if (slot && slot.parentElement) {
-        yield { slot, container: slot.parentElement };
+    for (const tag of ["markdown-toolbar", "action-bar"]) {
+      let found = false;
+      for (const host of document.getElementsByTagName(tag)) {
+        const anchor = host.querySelector(ANCHOR);
+        const slot = anchor && slotOf(anchor);
+        if (slot && slot.parentElement) {
+          found = true;
+          yield { slot, container: slot.parentElement };
+        }
       }
+      if (found) return;
     }
   }
 
-  // The stored layout only changes through saveLayout, so read it once rather
-  // than per toolbar per mutation.
-  let cached;
-
-  function storedLayout() {
-    if (cached === undefined) {
-      try {
-        const raw = GM_getValue(LAYOUT_KEY, "");
-        cached = raw ? JSON.parse(raw) : null;
-      } catch (err) {
-        cached = null; // corrupt value, fall back to the defaults
-      }
+  function readStored() {
+    try {
+      const raw = GM_getValue(LAYOUT_KEY, "");
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      return null; // corrupt value, fall back to the defaults
     }
-    return cached;
   }
 
   // null clears the setting and restores the defaults.
   function saveLayout(layout) {
-    cached = layout;
     GM_setValue(LAYOUT_KEY, layout ? JSON.stringify(layout) : "");
     inject();
   }
@@ -297,7 +306,7 @@
       } catch (err) {
         action = "";
       }
-      actions.set(btn, action);
+      if (action) actions.set(btn, action); // never cache a failure
     }
     return action;
   }
@@ -350,12 +359,11 @@
     return out;
   }
 
-  function layoutFor(container, buttons) {
-    const layout = storedLayout() || defaultLayout || readOrder(container);
-    return reconcile(layout, buttons);
+  function layoutFor(container, buttons, stored) {
+    return reconcile(stored || defaultLayout || readOrder(container), buttons);
   }
 
-  function applyLayout(container) {
+  function applyLayout(container, stored) {
     const buttons = buttonsByAction(container);
     // Separators are interchangeable, so reuse the ones already present and
     // clone more only when the layout asks for more than GitHub shipped.
@@ -363,7 +371,7 @@
     const wanted = [];
     let next = 0;
 
-    for (const entry of layoutFor(container, buttons)) {
+    for (const entry of layoutFor(container, buttons, stored)) {
       let item;
       if (entry.id === SEPARATOR) {
         item = spare[next++];
@@ -544,7 +552,9 @@
     }
 
     const render = () =>
-      list.replaceChildren(...layoutFor(container, buttons).map(buildRow));
+      list.replaceChildren(
+        ...layoutFor(container, buttons, readStored()).map(buildRow),
+      );
     render();
 
     const addSeparator = document.createElement("button");
@@ -660,7 +670,9 @@
 
     // Rewire GitHub's <tool-tip> rather than using a title attribute, so
     // hovering gives their styled bubble below the button like every other.
-    const tip = item.querySelector("tool-tip");
+    const tips = item.querySelectorAll("tool-tip");
+    const tip = tips[0];
+    for (let i = 1; i < tips.length; i++) tips[i].remove();
 
     // Keep <action-bar>'s overflow bookkeeping away from our items.
     item.removeAttribute("data-targets");
@@ -694,6 +706,8 @@
   }
 
   function inject() {
+    installStyle(); // cheap, and reinstalls it if the head is ever swapped
+    const stored = readStored(); // once per pass, not once per toolbar
     for (const { slot, container } of containers()) {
       if (!container.hasAttribute(MANAGED)) {
         container.setAttribute(MANAGED, "");
@@ -708,7 +722,7 @@
       }
       // Capture GitHub's order once our buttons are in it, before any move.
       if (!defaultLayout) defaultLayout = captureDefault(container);
-      applyLayout(container);
+      applyLayout(container, stored);
     }
   }
 
@@ -716,7 +730,6 @@
     if (typeof GM_registerMenuCommand === "function") {
       GM_registerMenuCommand("Configure toolbar buttons", configure);
     }
-    installStyle();
     let queued = false;
     // inject() is idempotent, so the mutations it causes settle on the next pass.
     new MutationObserver(() => {
