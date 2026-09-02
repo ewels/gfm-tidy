@@ -2,7 +2,7 @@
 // @name         GFM Tidy
 // @namespace    https://github.com/ewels/gfm-tidy
 // @version      1.0.0
-// @description  Unwrap, dedent and <details> buttons for the GitHub markdown toolbar, and reorder or hide any button on it
+// @description  Unwrap, dedent, <details> and GitHub alert buttons for the markdown toolbar, and reorder or hide any button on it
 // @author       Phil Ewels
 // @license      MIT
 // @match        https://github.com/*
@@ -152,6 +152,8 @@
   const MARK = "data-gfm-tidy";
   const HIDDEN = "data-gfm-tidy-hidden";
   const MANAGED = "data-gfm-tidy-managed";
+  const REACT = "data-gfm-tidy-react"; // set by us, not guessed at in CSS
+  const OVERFLOWING = "data-overflowing";
   const LAYOUT_KEY = "layout";
   const SEPARATOR = "|";
   const HOME = "https://github.com/ewels/gfm-tidy";
@@ -163,6 +165,9 @@
   const BUTTON_SELECTOR = "button";
   const ICON_CSS = "flex:none;width:16px;height:16px;fill:currentColor";
   const MUTED = "var(--fgColor-muted,GrayText)";
+  const SMALL = "font-size:12px;color:" + MUTED;
+  const RULE = "border-top:1px solid var(--borderColor-muted,#d8dee4)";
+  const ROW = "display:flex;align-items:center;gap:10px";
 
   // Bold is the landmark, found by its icon: the classic editor renders
   // "octicon octicon-bold Button-visual" and React's renders "octicon
@@ -344,10 +349,6 @@
     "data-file-attachment-for",
   ];
 
-  // The toolbar as GitHub first rendered it, captured before anything is moved.
-  // This is what Reset restores, so the defaults never need storing.
-  let defaultLayout = null;
-
   // A toolbar item and the button inside it are used interchangeably all over
   // this file; these two are the only places that know how they relate.
   const buttonIn = (el) =>
@@ -384,26 +385,20 @@
     style.textContent =
       `[${MANAGED}]{flex-wrap:wrap}` +
       // React's toolbar row is a fixed height with overflow hidden, so a
-      // wrapped second row would be invisible. Scoped to React by its own
-      // divider element: relaxing the height on the classic toolbar instead
-      // left its <hr> dividers riding up over the border.
-      `[${MANAGED}]:has([data-component="ActionBar.VerticalDivider"]),` +
-      `[role=toolbar]:has([data-component="ActionBar.VerticalDivider"])` +
-      `{overflow:visible!important;height:auto!important;align-items:center}` +
-      // Both editors run an overflow manager that measures the toolbar and
-      // hides what it thinks will not fit. Adding buttons breaks that sum, so
-      // it hid most of GitHub's own: classic sets inline visibility, React
-      // marks items data-overflowing and shows a kebab menu instead. We curate
-      // the toolbar now, so neutralise both and let it wrap instead.
+      // wrapped second row would be invisible. Relaxing the same on the
+      // classic toolbar left its <hr> dividers riding up over the border, so
+      // this is marked from JS rather than guessed at from the markup.
+      `[${REACT}]{overflow:visible!important;height:auto!important;` +
+      `align-items:center}` +
+      // The classic editor's overflow manager hides items with inline
+      // visibility, which a stylesheet can outrank. React's marks them with
+      // an attribute that we strip in JS instead, because there a stylesheet
+      // could not reliably outrank it.
       `[${MANAGED}] ${ITEM},[${MANAGED}] > button{visibility:visible!important}` +
-      `[${MANAGED}] > [data-overflowing]{position:static!important;` +
-      `visibility:visible!important;opacity:1!important;` +
-      `width:auto!important;height:auto!important;pointer-events:auto!important}` +
-      `[${MANAGED}] > button[data-overflowing]{display:inline-flex!important}` +
       `[${MANAGED}] ~ .ActionBar-more-menu,[${MANAGED}] ~ button{display:none!important}` +
-      // the spacer React uses to push overflow off the end
+      // shape guess, not a contract: React's overflow spacer has no name of
+      // its own, and nothing else in the container is an empty bare div
       `[${MANAGED}] > div:empty:not([data-component]){display:none!important}` +
-      // last, so our own hiding always beats the resets above
       `[${HIDDEN}]{display:none!important}`;
     document.head.appendChild(style);
     styleEl = style;
@@ -456,47 +451,37 @@
     return action;
   }
 
-  // Primer React marks what it thinks overflows and hides it with visibility,
-  // from a rule our stylesheet cannot reliably outrank. Removing the marker is
-  // decisive where winning a specificity fight is guesswork.
-  function clearOverflowFlags(container) {
-    for (const flagged of container.querySelectorAll("[data-overflowing]")) {
-      flagged.removeAttribute("data-overflowing");
-    }
-    const list = container.parentElement;
-    if (list && list.getAttribute("data-has-overflow") === "true") {
-      list.setAttribute("data-has-overflow", "false");
-    }
-  }
+  // Everything React needs and classic does not. Called only when inject has
+  // established we are on React, so none of these has to sniff for it.
+  function prepareReact(container, bar) {
+    container.setAttribute(REACT, "");
+    const list = container.closest("[role=toolbar]");
+    if (list) list.setAttribute(REACT, "");
 
-  // React leaves Saved replies outside the ActionBar altogether, as a sibling
-  // of the whole thing, so the toolbar would differ between issues and pull
-  // requests. Move any such button in, and its tooltip with it, so it becomes
-  // an ordinary layout entry. Idempotent: once adopted it is inside the bar.
-  function adoptStrays(container) {
-    const bar = container.closest('[data-component="ActionBar"]');
-    const toolbar = bar && bar.parentElement;
-    if (!toolbar) return; // classic keeps everything in one place already
-    for (const btn of [...toolbar.querySelectorAll("button")]) {
-      if (bar.contains(btn) || !actionOf(btn)) continue;
-      const tip = btn.nextElementSibling;
-      container.appendChild(btn);
-      if (tip && tip.matches('[data-component="Tooltip"]')) {
-        container.appendChild(tip);
-      }
+    // Saved replies sits outside the ActionBar, as a direct child of the
+    // toolbar wrapper, so the toolbar would otherwise differ between issues
+    // and pull requests. Idempotent: once adopted it is inside the bar.
+    for (const btn of bar.parentElement.children) {
+      if (btn.tagName === "BUTTON" && actionOf(btn)) container.appendChild(btn);
     }
-  }
 
-  // React nests some buttons in group wrappers. Any reorder pulls them out
-  // anyway, so flatten once and let everything downstream see the single flat
-  // list the classic toolbar already gives us.
-  function flattenGroups(container) {
+    // Some buttons are nested in group wrappers. Any reorder pulls them out
+    // anyway, so flatten once and let the layout code see the single flat
+    // list the classic toolbar already gives it.
     for (const group of container.querySelectorAll(GROUP)) {
       group.replaceWith(...group.childNodes);
     }
+
+    // React hides what it thinks overflows with visibility, from a rule a
+    // stylesheet cannot reliably outrank. Removing the marker is decisive.
+    for (const flagged of container.querySelectorAll(`[${OVERFLOWING}]`)) {
+      flagged.removeAttribute(OVERFLOWING);
+    }
+    const measured = container.closest(`[data-has-overflow="true"]`);
+    if (measured) measured.setAttribute("data-has-overflow", "false");
   }
 
-  // One walk per container, so everything downstream is an O(1) lookup.
+  // One walk per container  // One walk per container, so everything downstream is an O(1) lookup.
   function buttonsByAction(container) {
     const found = new Map();
     for (const btn of container.querySelectorAll(BUTTON_SELECTOR)) {
@@ -506,57 +491,24 @@
     return found;
   }
 
-  // A container's default layout: its present DOM order, with each entry on
-  // unless its button ships switched off. Never reads HIDDEN, because it only
-  // ever describes defaults.
-  function readOrder(container) {
-    const order = [];
-    for (const item of container.children) {
-      if (item.matches(DIVIDER)) {
-        order.push({ id: SEPARATOR, on: true });
-        continue;
-      }
-      const btn = buttonIn(item);
-      const action = btn && actionOf(btn);
-      if (action) order.push({ id: action, on: defaultOn(action) });
-    }
-    return order;
-  }
-
-  // A separator only earns its place with a visible entry on either side of it,
-  // so no divider is left stranded at an end of the toolbar or doubled up next
-  // to another. Hidden buttons between it and the next visible one are fine.
+  // A separator only earns its place with a visible entry on either side of
+  // it, so none is stranded at an end of the toolbar or doubled up next to
+  // another. Hidden buttons between it and the next visible one are fine.
   function pruneSeparators(order) {
     let before = false;
-    order.forEach((entry, i) => {
+    for (let i = 0; i < order.length; i++) {
+      const entry = order[i];
       if (entry.id !== SEPARATOR) {
         if (entry.on) before = true;
-        return;
+        continue;
       }
-      const after = order.slice(i + 1).find((e) => e.id !== SEPARATOR && e.on);
-      entry.on = before && !!after;
+      let after = false;
+      for (let j = i + 1; j < order.length && !after; j++) {
+        after = order[j].id !== SEPARATOR && order[j].on;
+      }
+      entry.on = before && after;
       if (entry.on) before = false; // the next one needs its own content
-    });
-    return order;
-  }
-
-  // The default is GitHub's own order with our buttons appended, and a
-  // separator before each one whose spec starts a group. Walking backwards so
-  // the splices do not shift the indices still to check.
-  function captureDefault(container) {
-    // Keyed by id, so GitHub's own divider positions are dropped: DEFAULT_ORDER
-    // decides where the groups fall, identically on either editor.
-    const live = new Map(
-      readOrder(container)
-        .filter((entry) => entry.id !== SEPARATOR)
-        .map((entry) => [entry.id, entry]),
-    );
-    const order = [];
-    for (const id of DEFAULT_ORDER) {
-      if (id === SEPARATOR) order.push({ id: SEPARATOR, on: true });
-      else if (live.has(id)) order.push(live.get(id)) && live.delete(id);
     }
-    for (const entry of live.values()) order.push(entry); // unlisted, keep it
     return order;
   }
 
@@ -566,19 +518,20 @@
     const out = layout
       .filter((e) => e.id === SEPARATOR || buttons.has(e.id))
       .map((e) => ({ ...e })); // copies: pruneSeparators mutates `on`
+    const listed = new Set(out.map((e) => e.id));
     for (const action of buttons.keys()) {
-      if (!out.some((e) => e.id === action)) {
-        out.push({ id: action, on: defaultOn(action) });
-      }
+      if (!listed.has(action)) out.push({ id: action, on: defaultOn(action) });
     }
     return out;
   }
 
-  function layoutFor(container, buttons, stored) {
-    const layout = reconcile(
-      stored || defaultLayout || readOrder(container),
-      buttons,
-    );
+  // Reset restores this. reconcile drops whatever a given toolbar lacks and
+  // appends anything GitHub has added, so it needs no per-page capture and no
+  // "snapshot before anything moves" ordering constraint.
+  const DEFAULTS = DEFAULT_ORDER.map((id) => ({ id, on: defaultOn(id) }));
+
+  function layoutFor(buttons, stored) {
+    const layout = reconcile(stored || DEFAULTS, buttons);
     // Every time, not just for defaults: hiding a button can orphan the
     // divider beside it at any point.
     return pruneSeparators(layout);
@@ -592,7 +545,7 @@
     const wanted = [];
     let next = 0;
 
-    for (const entry of layoutFor(container, buttons, stored)) {
+    for (const entry of layoutFor(buttons, stored)) {
       let item;
       if (entry.id === SEPARATOR) {
         item = spare[next++];
@@ -608,7 +561,7 @@
       if (!item) continue;
 
       if (entry.on) item.removeAttribute(HIDDEN);
-      else item.setAttribute(HIDDEN, "");
+      else if (!item.hasAttribute(HIDDEN)) item.setAttribute(HIDDEN, "");
       wanted.push(item);
     }
     for (; next < spare.length; next++) spare[next].setAttribute(HIDDEN, "");
@@ -616,11 +569,18 @@
     // Only touch the DOM when the order is actually wrong. Moving a node fires
     // a mutation even when it lands where it already was, which would have the
     // observer calling us forever.
-    const current = [...container.children].filter((el) => wanted.includes(el));
+    const want = new Set(wanted);
+    const current = [...container.children].filter((el) => want.has(el));
     const ordered =
       current.length === wanted.length &&
       current.every((el, i) => el === wanted[i]);
-    if (!ordered) container.append(...wanted);
+    if (ordered) return;
+
+    // Appending the modelled items would leave everything else — tooltips, the
+    // overflow spacer, a button whose icon we could not name — bunched in front
+    // of the whole toolbar, so move those to the end too.
+    const rest = [...container.children].filter((el) => !want.has(el));
+    container.append(...wanted, ...rest);
   }
 
   // GitHub keeps each button's visible name in a sibling <tool-tip>, so the
@@ -671,18 +631,14 @@
 
     const hint = document.createElement("p");
     hint.textContent = "Drag to reorder. Switch off what you never use.";
-    hint.style.cssText =
-      "margin:4px 0 8px;flex:none;font-size:12px;color:" + MUTED;
+    hint.style.cssText = "margin:4px 0 8px;flex:none;" + SMALL;
 
     const fallback = document.createElement("p");
     fallback.textContent =
       "Switch off Configure and you can still reopen this panel from your " +
       "userscript manager's icon in the browser toolbar, under " +
       '"Configure toolbar buttons".';
-    fallback.style.cssText =
-      "margin:0;padding:8px 0 0;font-size:12px;color:" +
-      MUTED +
-      ";border-top:1px solid var(--borderColor-muted,#d8dee4)";
+    fallback.style.cssText = "margin:0;padding:8px 0 0;" + SMALL + ";" + RULE;
 
     const list = document.createElement("div");
     // padding-right keeps the checkboxes clear of the scrollbar. Overlay
@@ -708,9 +664,7 @@
 
       const row = document.createElement("div");
       row.dataset.id = entry.id;
-      row.style.cssText =
-        "display:flex;align-items:center;gap:10px;padding:8px 0;" +
-        "border-top:1px solid var(--borderColor-muted,#d8dee4)";
+      row.style.cssText = row.style.cssText = ROW + ";padding:8px 0;" + RULE;
 
       const handle = svgIcon(GRABBER);
       handle.style.cursor = "grab";
@@ -740,8 +694,7 @@
       });
 
       const label = document.createElement("label");
-      label.style.cssText =
-        "flex:1;display:flex;align-items:center;gap:10px;cursor:pointer";
+      label.style.cssText = "flex:1;cursor:pointer;" + ROW;
 
       const source = btn && btn.querySelector("svg");
       let glyph;
@@ -762,7 +715,7 @@
       if (DESCRIPTIONS[entry.id]) {
         const blurb = document.createElement("span");
         blurb.textContent = DESCRIPTIONS[entry.id];
-        blurb.style.cssText = "display:block;font-size:12px;color:" + MUTED;
+        blurb.style.cssText = "display:block;" + SMALL;
         text.appendChild(blurb);
       }
 
@@ -803,58 +756,45 @@
 
     const render = () =>
       list.replaceChildren(
-        ...layoutFor(container, buttons, readStored()).map(buildRow),
+        ...layoutFor(buttons, readStored()).map(buildRow),
         fallback,
       );
     render();
 
-    const addSeparator = document.createElement("button");
-    addSeparator.type = "button";
-    addSeparator.className = "btn";
-    addSeparator.textContent = "Add separator";
-    // Nothing to clone from means the entry would store but never render.
-    addSeparator.disabled = !container.querySelector(DIVIDER);
-    addSeparator.addEventListener("click", () => {
+    const button = (label, className, onClick) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      // GitHub's own button classes, so they match the page and follow its theme.
+      btn.className = className;
+      btn.textContent = label;
+      btn.addEventListener("click", onClick);
+      return btn;
+    };
+
+    const addSeparator = button("Add separator", "btn", () => {
       list.insertBefore(buildRow({ id: SEPARATOR, on: true }), fallback);
       commit();
     });
+    // Nothing to clone from means the entry would store but never render.
+    addSeparator.disabled = !container.querySelector(DIVIDER);
 
-    const reset = document.createElement("button");
-    reset.type = "button";
-    reset.className = "btn";
-    reset.textContent = "Reset";
-    reset.addEventListener("click", () => {
+    const reset = button("Reset", "btn", () => {
       if (!confirm("Reset the toolbar to its original order?")) return;
       saveLayout(null);
       render();
     });
 
-    const done = document.createElement("button");
-    done.type = "button";
-    // GitHub's own button classes, so they match the page and follow its theme.
-    done.className = "btn-primary btn";
-    done.textContent = "Done";
+    const done = button("Done", "btn-primary btn", () => dialog.close());
     done.style.marginLeft = "auto";
-    done.addEventListener("click", () => dialog.close());
 
     const footer = document.createElement("div");
     footer.style.cssText = "display:flex;gap:8px;flex:none;margin-top:16px";
     footer.append(addSeparator, reset, done);
 
     dialog.append(heading, hint, list, footer);
-    // A native <dialog> ignores backdrop clicks, and the click lands on the
-    // dialog itself, so compare against its box rather than the target.
-    dialog.addEventListener("click", (event) => {
-      const box = dialog.getBoundingClientRect();
-      if (
-        event.clientX < box.left ||
-        event.clientX > box.right ||
-        event.clientY < box.top ||
-        event.clientY > box.bottom
-      ) {
-        dialog.close();
-      }
-    });
+    // Native light dismiss: gets the rounded corners right, which comparing
+    // against the bounding box did not.
+    dialog.setAttribute("closedby", "any");
     dialog.addEventListener("close", () => dialog.remove());
     document.body.appendChild(dialog);
     dialog.showModal();
@@ -977,9 +917,8 @@
       if (!container.hasAttribute(MANAGED)) {
         container.setAttribute(MANAGED, "");
       }
-      adoptStrays(container);
-      flattenGroups(container);
-      clearOverflowFlags(container);
+      const bar = container.closest('[data-component="ActionBar"]');
+      if (bar) prepareReact(container, bar); // classic needs none of it
       // Only our own buttons answer this: a reused divider must not count, or
       // one failed buildItem would lose the buttons for the session.
       if (!container.querySelector("button[" + MARK + "]")) {
@@ -988,8 +927,6 @@
           if (item) container.appendChild(item);
         }
       }
-      // Capture GitHub's order once our buttons are in it, before any move.
-      if (!defaultLayout) defaultLayout = captureDefault(container);
       applyLayout(container, stored);
     }
   }
@@ -1007,14 +944,14 @@
         queued = false;
         inject();
       });
-      // data-overflowing is watched because Primer sets it without touching
-      // childList; our own attributes are not in the filter, so we never wake
-      // ourselves up.
+      // data-overflowing is watched because React sets it without touching
+      // childList. Stripping it wakes us once more, which finds nothing and
+      // settles; our own attributes are not in the filter.
     }).observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["data-overflowing"],
+      attributeFilter: [OVERFLOWING],
     });
     inject();
   }

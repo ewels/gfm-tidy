@@ -5,10 +5,9 @@ code in this repository.
 
 ## What this is
 
-A single-file userscript (`gfm-tidy.user.js`) that adds three buttons to
-GitHub's markdown comment toolbar (unwrap, dedent, wrap in `<details>`) and lets
-the user reorder or hide every button on that toolbar. No build step, no
-dependencies.
+A single-file userscript (`gfm-tidy.user.js`) that adds nine buttons to GitHub's
+markdown comment toolbar (unwrap, dedent, wrap in `<details>`) and lets the user
+reorder or hide every button on that toolbar. No build step, no dependencies.
 
 Note the directory is still named `gfm-fixup` while the project is `gfm-tidy`.
 
@@ -34,12 +33,12 @@ userscript managers compare that field against `@updateURL`.
 
 Two layers inside one IIFE, split at the `// dom layer` comment:
 
-**Transforms** (`unwrap`, `dedent`, `detailsWrap`) are pure string functions and
-the only tested code. `unwrap` classifies each line via the regexes at the top
-and joins it to the previous one only when both `startsBlock` and `endsBlock`
-allow it — that pair is what protects code fences, tables, headings, hard breaks
-and list structure. It also frees backticked commit hashes (`HASH_SPAN`), done
-inside the loop's fence check so code blocks keep theirs.
+**Transforms** (`unwrap`, `dedent`, `detailsWrap`, `alertWrap`) are pure string
+functions and the only tested code. `unwrap` classifies each line via the
+regexes at the top and joins it to the previous one only when both `startsBlock`
+and `endsBlock` allow it — that pair is what protects code fences, tables,
+headings, hard breaks and list structure. It also frees backticked commit hashes
+(`HASH_SPAN`), done inside the loop's fence check so code blocks keep theirs.
 
 **DOM layer** injects the buttons and owns the toolbar's layout.
 
@@ -68,13 +67,18 @@ Consequences encoded in the script:
   class is the only landmark both editors share, and a class lookup is far
   cheaper than matching an attribute list against the whole document on every
   mutation. Everything else is located relative to that button.
-- `adoptStrays` moves buttons React leaves _outside_ the ActionBar — Saved
-  replies is a sibling of the whole thing — into the container, with its
-  tooltip, so the toolbar is the same on issues as on pull requests. It is a
-  no-op on classic, which keeps everything in one place.
-- `flattenGroups` lifts React's `ActionBar.Group` children into the container on
-  first sight. Any reorder would pull them out anyway, so flattening once lets
-  the layout code see the one flat list the classic toolbar already gives it.
+- **"Am I on React?" is decided once, in `inject`**, by
+  `container.closest('[data-component="ActionBar"]')`, and recorded as the
+  `REACT` attribute on the container and its `[role=toolbar]` ancestor.
+  Everything React-only keys off that mark. Do not reintroduce a CSS selector
+  that sniffs for React by markup shape: an earlier version scoped a rule with
+  `[role=toolbar]:has(…)`, which matched **every** Primer ActionBar on
+  github.com, not just comment boxes.
+- `prepareReact` does everything React needs and classic does not, in one place:
+  adopt buttons left outside the ActionBar (Saved replies is a sibling of the
+  whole thing, so the toolbar would otherwise differ from pull requests),
+  flatten `ActionBar.Group` wrappers into the flat list the layout code assumes,
+  and strip the `data-overflowing` markers described below.
 - `slotOf` returns `.ActionBar-item` on the classic editor and the bare button
   on React, which is why the `|| btn` fallback is load-bearing rather than
   defensive.
@@ -89,8 +93,8 @@ Consequences encoded in the script:
 - A `BUTTONS` spec either carries `fn`, a pure text transform run through
   `apply`, or `onClick`, which handles the click itself — that is how the
   Configure button opens the panel. A spec with `off: true` ships switched off:
-  `defaultOn` is consulted by both `readOrder` and `reconcile`, so a newly added
-  default-off button stays off for people who already have a saved layout.
+  `defaultOn` is consulted by `reconcile` for entries new to a layout, so a
+  newly added default-off button stays off for people who already have one.
   `HIDE_ON_INSTALL` does the same for GitHub's own buttons, and
   `pruneSeparators` then drops any divider with no visible entry on one side or
   the other, so none is stranded at an end of the toolbar or doubled up. It
@@ -123,18 +127,20 @@ Config is one `GM_setValue` key, `layout`: an ordered array of `{id, on}`.
 Separators are entries with `id === SEPARATOR` (`"|"`) whose position is their
 only identity, so they need no ids and any number can exist.
 
-- `readOrder` reads a container's current order; `reconcile` drops entries whose
-  button has gone and appends ones GitHub has added, so a saved layout survives
-  GitHub changing the toolbar.
-- `defaultLayout` is captured by `captureDefault` on the first `inject` pass
-  **before anything is moved**, and splices in the separator that precedes our
-  buttons rather than that separator being appended to the DOM, which is what
-  Reset restores. It is deliberately never stored: a reload always re-renders
-  GitHub's own order, so the snapshot cannot go stale.
-- `applyLayout` reorders by re-appending the items in sequence. It compares
-  current against desired order first and only touches the DOM when they differ
-  — **moving a node fires a mutation even when it lands where it already was, so
-  without that guard the MutationObserver calls itself forever.**
+- `DEFAULTS` is `DEFAULT_ORDER` with each entry's default on/off state, and is
+  what Reset restores. Nothing is captured from the DOM, so there is no snapshot
+  to go stale and no "read the order before anything moves" ordering constraint.
+- `reconcile` does the whole merge: keep separators, keep entries whose button
+  this toolbar actually has, append ones GitHub has added. It is the only place
+  that decides layout membership — that is why a per-editor default capture is
+  unnecessary, and why a saved layout survives GitHub changing the toolbar.
+- `applyLayout` reorders by re-appending the items in sequence, then re-appends
+  everything it does not model (tooltips, React's overflow spacer, a button
+  whose icon it could not name) so those are not left bunched in front. It
+  compares current against desired order first and only touches the DOM when
+  they differ — **moving a node fires a mutation even when it lands where it
+  already was, so without that guard the MutationObserver calls itself
+  forever.**
 
 ### Two things that fight back
 
