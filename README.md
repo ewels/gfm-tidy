@@ -43,7 +43,8 @@ separators between groups.
 - Switch a row off to hide that button.
 - **Add separator** appends a new divider to the bottom of the list; drag it
   where you want it.
-- **Reset** restores GitHub's original buttons and order.
+- **Reset** restores the original order. That is GitHub's own order with these
+  three buttons after a separator, not GitHub's toolbar without them.
 
 Changes apply immediately, with no reload, so an unsent comment draft is safe.
 

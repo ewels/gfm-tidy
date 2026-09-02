@@ -54,9 +54,10 @@ Buttons are `<button data-md-button="bold">` inside
   styling, then removes every attribute in `STRIP`. **Leaving `data-md-button`
   on a clone makes our button also apply bold**, and leaving `aria-labelledby`
   makes screen readers announce it as "Bold".
-- Button identity is the action name in `data-analytics-event`. `actionOf` reads
-  our own `MARK` attribute first, so our buttons and GitHub's share one
-  vocabulary (`UNWRAP`, `MENTION`, …). That is also the config's vocabulary.
+- Button identity is the action name in `data-analytics-event`, memoised per
+  node in a `WeakMap`. `actionOf` reads our own `MARK` attribute first, so our
+  buttons and GitHub's share one vocabulary (`UNWRAP`, `MENTION`, …). That is
+  also the config's vocabulary.
 - Labels and icons in the settings panel are read from the live toolbar
   (`labelOf`, cloned `<svg>`), never hardcoded, so they track GitHub's changes.
 - Our buttons get a rewired clone of GitHub's `<tool-tip>` rather than a `title`
@@ -68,15 +69,17 @@ Config is one `GM_setValue` key, `layout`: an ordered array of `{id, on}`.
 Separators are entries with `id === SEPARATOR` (`"|"`) whose position is their
 only identity, so they need no ids and any number can exist.
 
-- `readLayout` reads a container's current order; `reconcile` drops entries
-  whose button has gone and appends ones GitHub has added, so a saved layout
-  survives GitHub changing the toolbar.
-- `defaultLayout` is captured on the first `inject` pass **before anything is
-  moved**, which is what Reset restores. It is deliberately never stored: a
-  reload always re-renders GitHub's own order, so the snapshot cannot go stale.
-- `applyLayout` reorders by `appendChild` in sequence. It compares current
-  against desired order first and only touches the DOM when they differ —
-  **moving a node fires a mutation even when it lands where it already was, so
+- `readOrder` reads a container's current order; `reconcile` drops entries whose
+  button has gone and appends ones GitHub has added, so a saved layout survives
+  GitHub changing the toolbar.
+- `defaultLayout` is captured by `captureDefault` on the first `inject` pass
+  **before anything is moved**, and splices in the separator that precedes our
+  buttons rather than that separator being appended to the DOM, which is what
+  Reset restores. It is deliberately never stored: a reload always re-renders
+  GitHub's own order, so the snapshot cannot go stale.
+- `applyLayout` reorders by re-appending the items in sequence. It compares
+  current against desired order first and only touches the DOM when they differ
+  — **moving a node fires a mutation even when it lands where it already was, so
   without that guard the MutationObserver calls itself forever.**
 
 ### Two things that fight back

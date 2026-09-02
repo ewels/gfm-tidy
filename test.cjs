@@ -107,6 +107,7 @@ eq("handles empty input", unwrap(""), "");
 eq("strips a common space indent", dedent("    a\n      b"), "a\n  b");
 eq("ignores blank lines when measuring", dedent("  a\n\n  b"), "a\n\nb");
 eq("strips a common tab indent", dedent("\ta\n\tb"), "a\nb");
+eq("normalises whitespace-only lines", dedent("  a\n   \n  b"), "a\n\nb");
 eq("does nothing without a common indent", dedent("a\n  b"), "a\n  b");
 eq(
   "refuses to guess on mixed tabs and spaces",

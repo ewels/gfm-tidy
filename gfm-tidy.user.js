@@ -24,7 +24,7 @@
   const FENCE = /^\s{0,3}(```|~~~)/;
   const BLANK = /^\s*$/;
   const HEADING = /^\s{0,3}#{1,6}(\s|$)/;
-  const QUOTE = /^\s{0,3}>/;
+  const QUOTE = /^\s{0,3}>\s?/;
   const LIST = /^(\s*)([-*+]|\d+[.)])(\s+)/;
   const BREAK = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
   const SETEXT = /^\s{0,3}=+\s*$/;
@@ -33,30 +33,18 @@
   const CODE = /^(\s{4,}|\t)/;
   const HARDBREAK = /(\s{2,}|\\)$/;
 
-  // A line that can never be absorbed into the line above it.
-  function startsBlock(line, inList) {
-    if (BLANK.test(line)) return true;
-    if (FENCE.test(line) || HEADING.test(line) || BREAK.test(line)) return true;
-    if (SETEXT.test(line) || TABLE.test(line) || HTML.test(line)) return true;
-    if (LIST.test(line)) return true;
-    // Indented code only counts outside a list; inside one it is a wrapped item.
-    if (!inList && CODE.test(line)) return true;
-    return false;
-  }
+  // Constructs that end the paragraph they appear in, whichever side you look
+  // from. Keeping them in one list means a new block type is added once.
+  const BLOCK = [BLANK, FENCE, HEADING, BREAK, SETEXT, TABLE, HTML];
+  const isBlock = (line) => BLOCK.some((re) => re.test(line));
+
+  // A line that can never be absorbed into the line above it. Indented code
+  // only counts outside a list; inside one it is a wrapped item.
+  const startsBlock = (line, inList) =>
+    isBlock(line) || LIST.test(line) || (!inList && CODE.test(line));
 
   // A line that can never absorb the line below it.
-  function endsBlock(line) {
-    return (
-      BLANK.test(line) ||
-      FENCE.test(line) ||
-      HEADING.test(line) ||
-      BREAK.test(line) ||
-      TABLE.test(line) ||
-      HTML.test(line) ||
-      SETEXT.test(line) ||
-      HARDBREAK.test(line)
-    );
-  }
+  const endsBlock = (line) => isBlock(line) || HARDBREAK.test(line);
 
   // Join hard-wrapped lines back into full-length paragraphs, leaving code
   // fences, headings, tables, list structure and blockquote markers intact.
@@ -89,8 +77,8 @@
 
       if (joinable) {
         // Inside a blockquote the continuation carries its own '>' marker.
-        const tail = QUOTE.test(line) ? line.replace(/^\s{0,3}>\s?/, "") : line;
-        out[out.length - 1] = prev.replace(/\s+$/, "") + " " + tail.trim();
+        const tail = QUOTE.test(line) ? line.replace(QUOTE, "") : line;
+        out[out.length - 1] = prev.trimEnd() + " " + tail.trim();
       } else {
         out.push(line);
       }
@@ -115,12 +103,10 @@
       prefix = prefix.slice(0, i);
     }
     if (!prefix) return text;
+    // Every non-blank line starts with prefix by construction, so no fallback
+    // is reachable; whitespace-only lines simply become empty.
     return lines
-      .map((l) =>
-        l.startsWith(prefix)
-          ? l.slice(prefix.length)
-          : l.replace(/^[ \t]+/, ""),
-      )
+      .map((l) => (BLANK.test(l) ? "" : l.slice(prefix.length)))
       .join("\n");
   }
 
@@ -147,7 +133,16 @@
   const LAYOUT_KEY = "layout";
   const SEPARATOR = "|";
   const HOME = "https://github.com/ewels/gfm-tidy";
+  const ITEM = ".ActionBar-item";
+  const DIVIDER = ".ActionBar-divider";
   const BUTTON_SELECTOR = "button[data-analytics-event], button[" + MARK + "]";
+  const ICON_CSS = "flex:none;width:16px;height:16px;fill:currentColor";
+  const MUTED = "var(--fgColor-muted,GrayText)";
+
+  // Bold is the stable landmark. GitHub's current toolbar labels its buttons
+  // with data-md-button and an aria-labelledby <tool-tip>; the aria-label form
+  // is a fallback in case a future editor drops the data attribute.
+  const ANCHOR = 'button[data-md-button="bold"], button[aria-label="Bold"]';
 
   // Short explanations for the settings panel. Titles and icons are read from
   // the live toolbar, so only the prose lives here; an unrecognised button just
@@ -178,16 +173,56 @@
     "M10 13a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0-4a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0-4a1 1 0 1 1 0-2 1 1 0 0 1 0 2ZM6 13a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0-4a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0-4a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z";
   const SEP_ICON = "M7.25 1.5h1.5v13h-1.5z";
 
+  const BUTTONS = [
+    {
+      key: "UNWRAP",
+      label: "Unwrap",
+      icon: "M1 2.5h14V4H1zM1 12h14v1.5H1zM4.5 5.5 1.5 8l3 2.5V9h7v1.5L14.5 8l-3-2.5V7h-7z",
+      fn: unwrap,
+    },
+    {
+      key: "DEDENT",
+      label: "Dedent",
+      icon: "M1 2h14v1.5H1zM1 12.5h14V14H1zM6.5 5.5h8.5V7H6.5zM6.5 9h8.5v1.5H6.5zM4.5 5.25 1.5 7.75l3 2.5z",
+      fn: dedent,
+    },
+    {
+      key: "DETAILS",
+      label: "Details",
+      icon: "M2 4l4 3-4 3zM8 4h6v1.5H8zM8 9.5h6V11H8z",
+      fn: detailsWrap,
+    },
+  ];
+  const OURS = new Set(BUTTONS.map((spec) => spec.key));
+
+  // Attributes that would make a cloned Bold button behave like Bold.
+  const STRIP = [
+    "data-md-button",
+    "data-hotkey",
+    "data-hotkey-scope",
+    "data-analytics-event",
+    "aria-labelledby",
+  ];
+
   // The toolbar as GitHub first rendered it, captured before anything is moved.
   // This is what Reset restores, so the defaults never need storing.
   let defaultLayout = null;
 
-  function svgIcon(d) {
+  // A toolbar item and the button inside it are used interchangeably all over
+  // this file; these two are the only places that know how they relate.
+  const buttonIn = (el) =>
+    el.matches("button") ? el : el.querySelector("button");
+  const slotOf = (btn) => btn.closest(ITEM) || btn;
+
+  function svgIcon(d, className) {
     const ns = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(ns, "svg");
     svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("width", "16");
+    svg.setAttribute("height", "16");
     svg.setAttribute("aria-hidden", "true");
-    svg.style.cssText = "flex:none;width:16px;height:16px;fill:currentColor";
+    if (className) svg.setAttribute("class", className);
+    else svg.style.cssText = ICON_CSS;
     const path = document.createElementNS(ns, "path");
     path.setAttribute("d", d);
     svg.appendChild(path);
@@ -200,101 +235,146 @@
   // the toolbar now, so override it outright. A stylesheet beats its inline
   // styles, and wrapping is a friendlier overflow than its kebab menu.
   function installStyle() {
-    if (document.getElementById("gfm-tidy-style")) return;
     const style = document.createElement("style");
     style.id = "gfm-tidy-style";
     style.textContent =
-      "[" +
-      MANAGED +
-      "]{flex-wrap:wrap}[" +
-      MANAGED +
-      "] .ActionBar-item{visibility:visible!important}[" +
-      HIDDEN +
-      "]{display:none!important}[" +
-      MANAGED +
-      "] ~ .ActionBar-more-menu{display:none!important}";
+      `[${MANAGED}]{flex-wrap:wrap}` +
+      `[${MANAGED}] ${ITEM}{visibility:visible!important}` +
+      `[${HIDDEN}]{display:none!important}` +
+      `[${MANAGED}] ~ .ActionBar-more-menu{display:none!important}`;
     document.head.appendChild(style);
   }
 
-  function storedLayout() {
-    if (typeof GM_getValue !== "function") return null;
-    try {
-      const raw = GM_getValue(LAYOUT_KEY, "");
-      return raw ? JSON.parse(raw) : null;
-    } catch (err) {
-      return null; // corrupt value, fall back to the defaults
+  // Every toolbar on the page, scoped through <markdown-toolbar> so the hot
+  // path is a tag-name lookup: ANCHOR alone has no fast path, so matching it
+  // against the whole document visited every element on every mutation.
+  function* containers() {
+    for (const toolbar of document.getElementsByTagName("markdown-toolbar")) {
+      const anchor = toolbar.querySelector(ANCHOR);
+      const slot = anchor && slotOf(anchor);
+      if (slot && slot.parentElement) {
+        yield { slot, container: slot.parentElement };
+      }
     }
   }
 
+  // The stored layout only changes through saveLayout, so read it once rather
+  // than per toolbar per mutation.
+  let cached;
+
+  function storedLayout() {
+    if (cached === undefined) {
+      try {
+        const raw = GM_getValue(LAYOUT_KEY, "");
+        cached = raw ? JSON.parse(raw) : null;
+      } catch (err) {
+        cached = null; // corrupt value, fall back to the defaults
+      }
+    }
+    return cached;
+  }
+
+  // null clears the setting and restores the defaults.
   function saveLayout(layout) {
-    GM_setValue(LAYOUT_KEY, JSON.stringify(layout));
+    cached = layout;
+    GM_setValue(LAYOUT_KEY, layout ? JSON.stringify(layout) : "");
     inject();
   }
 
-  function buttonFor(container, action) {
-    for (const btn of container.querySelectorAll(BUTTON_SELECTOR)) {
-      if (actionOf(btn) === action) return btn;
+  // A button's action name never changes, and parsing the analytics blob for
+  // every layout entry of every toolbar was the bulk of each pass.
+  const actions = new WeakMap();
+
+  function actionOf(btn) {
+    const own = btn.getAttribute(MARK); // our own buttons name themselves
+    if (own) return own;
+    let action = actions.get(btn);
+    if (action === undefined) {
+      try {
+        action =
+          JSON.parse(btn.getAttribute("data-analytics-event") || "{}").action ||
+          "";
+      } catch (err) {
+        action = "";
+      }
+      actions.set(btn, action);
     }
-    return null;
+    return action;
   }
 
-  function itemFor(container, action) {
-    const btn = buttonFor(container, action);
-    return btn && (btn.closest(".ActionBar-item") || btn);
+  // One walk per container, so everything downstream is an O(1) lookup.
+  function buttonsByAction(container) {
+    const found = new Map();
+    for (const btn of container.querySelectorAll(BUTTON_SELECTOR)) {
+      const action = actionOf(btn);
+      if (action && !found.has(action)) found.set(action, btn);
+    }
+    return found;
   }
 
-  // A container's present order, read straight off the DOM.
-  function readLayout(container) {
-    const layout = [];
+  // A container's present order, every entry on. Only ever used for defaults,
+  // which are all-on by construction, so it does not read HIDDEN.
+  function readOrder(container) {
+    const order = [];
     for (const item of container.children) {
-      if (item.classList.contains("ActionBar-divider")) {
-        layout.push({ id: SEPARATOR, on: true });
+      if (item.matches(DIVIDER)) {
+        order.push({ id: SEPARATOR, on: true });
         continue;
       }
-      const btn = item.matches("button") ? item : item.querySelector("button");
+      const btn = buttonIn(item);
       const action = btn && actionOf(btn);
-      if (action) layout.push({ id: action, on: true });
+      if (action) order.push({ id: action, on: true });
     }
-    return layout;
+    return order;
+  }
+
+  // The default is GitHub's own order with our buttons after a separator.
+  // Expressed here rather than by appending a divider to the DOM, so that
+  // separators are only ever materialised in one place: applyLayout.
+  function captureDefault(container) {
+    const order = readOrder(container);
+    const first = order.findIndex((entry) => OURS.has(entry.id));
+    if (first > 0 && container.querySelector(DIVIDER)) {
+      order.splice(first, 0, { id: SEPARATOR, on: true });
+    }
+    return order;
   }
 
   // Drop entries whose button has gone and append ones GitHub has added, so a
   // saved layout survives GitHub changing its toolbar.
-  function reconcile(layout, container) {
-    const live = [];
-    for (const btn of container.querySelectorAll(BUTTON_SELECTOR)) {
-      const action = actionOf(btn);
-      if (action && !live.includes(action)) live.push(action);
-    }
-    const out = layout.filter((e) => e.id === SEPARATOR || live.includes(e.id));
-    for (const action of live) {
+  function reconcile(layout, buttons) {
+    const out = layout.filter((e) => e.id === SEPARATOR || buttons.has(e.id));
+    for (const action of buttons.keys()) {
       if (!out.some((e) => e.id === action)) out.push({ id: action, on: true });
     }
     return out;
   }
 
-  function layoutFor(container) {
-    return reconcile(
-      storedLayout() || defaultLayout || readLayout(container),
-      container,
-    );
+  function layoutFor(container, buttons) {
+    const layout = storedLayout() || defaultLayout || readOrder(container);
+    return reconcile(layout, buttons);
   }
 
   function applyLayout(container) {
+    const buttons = buttonsByAction(container);
     // Separators are interchangeable, so reuse the ones already present and
     // clone more only when the layout asks for more than GitHub shipped.
-    const spare = [...container.querySelectorAll(".ActionBar-divider")];
+    const spare = [...container.querySelectorAll(DIVIDER)];
     const wanted = [];
     let next = 0;
 
-    for (const entry of layoutFor(container)) {
+    for (const entry of layoutFor(container, buttons)) {
       let item;
       if (entry.id === SEPARATOR) {
-        item = spare[next++] || (spare[0] && spare[0].cloneNode(true));
-        if (!item) continue;
-        item.setAttribute(MARK, "divider");
+        item = spare[next++];
+        if (!item && spare[0]) {
+          item = spare[0].cloneNode(true);
+          // Keep <action-bar>'s overflow bookkeeping away from ones we own.
+          item.removeAttribute("data-targets");
+        }
       } else {
-        item = itemFor(container, entry.id);
+        const btn = buttons.get(entry.id);
+        item = btn && slotOf(btn);
       }
       if (!item) continue;
 
@@ -311,7 +391,7 @@
     const ordered =
       current.length === wanted.length &&
       current.every((el, i) => el === wanted[i]);
-    if (!ordered) for (const item of wanted) container.appendChild(item);
+    if (!ordered) container.append(...wanted);
   }
 
   // GitHub keeps each button's visible name in a sibling <tool-tip>, so the
@@ -327,13 +407,13 @@
   }
 
   function configure() {
-    const anchor = document.querySelector(ANCHOR);
-    const container =
-      anchor && (anchor.closest(".ActionBar-item") || anchor).parentElement;
-    if (!container) {
+    const first = containers().next().value;
+    if (!first) {
       alert("Open a GitHub page with a comment box, then try again.");
       return;
     }
+    const container = first.container;
+    const buttons = buttonsByAction(container);
 
     const dialog = document.createElement("dialog");
     // showModal() otherwise focuses the first focusable child, drawing a
@@ -363,7 +443,7 @@
     const hint = document.createElement("p");
     hint.textContent = "Drag to reorder. Switch off what you never use.";
     hint.style.cssText =
-      "margin:4px 0 8px;flex:none;font-size:12px;color:var(--fgColor-muted,GrayText)";
+      "margin:4px 0 8px;flex:none;font-size:12px;color:" + MUTED;
 
     const list = document.createElement("div");
     // padding-right keeps the checkboxes clear of the scrollbar. Overlay
@@ -382,17 +462,20 @@
       );
 
     function buildRow(entry) {
+      const sep = entry.id === SEPARATOR;
+      const btn = sep ? null : buttons.get(entry.id);
+
       const row = document.createElement("div");
       row.dataset.id = entry.id;
       row.style.cssText =
         "display:flex;align-items:center;gap:10px;padding:8px 0;" +
         "border-top:1px solid var(--borderColor-muted,#d8dee4)" +
         // separators are structure rather than features, so let them recede
-        (entry.id === SEPARATOR ? ";opacity:0.65" : "");
+        (sep ? ";opacity:0.65" : "");
 
       const handle = svgIcon(GRABBER);
       handle.style.cursor = "grab";
-      handle.style.color = "var(--fgColor-muted,GrayText)";
+      handle.style.color = MUTED;
       // draggable only while the handle is held, so the row still selects text
       // and the drag image is the whole row rather than the handle alone.
       handle.addEventListener("mousedown", () => {
@@ -417,8 +500,6 @@
         list.insertBefore(dragging, below ? row.nextSibling : row);
       });
 
-      const btn =
-        entry.id === SEPARATOR ? null : buttonFor(container, entry.id);
       const label = document.createElement("label");
       label.style.cssText =
         "flex:1;display:flex;align-items:center;gap:10px;cursor:pointer";
@@ -427,8 +508,7 @@
       if (source) {
         const copy = source.cloneNode(true);
         copy.removeAttribute("class"); // drop Primer's button-specific sizing
-        copy.style.cssText =
-          "flex:none;width:16px;height:16px;fill:currentColor";
+        copy.style.cssText = ICON_CSS;
         label.appendChild(copy);
       } else {
         label.appendChild(svgIcon(SEP_ICON));
@@ -437,20 +517,18 @@
       const text = document.createElement("span");
       text.style.cssText = "flex:1";
       const title = document.createElement("strong");
-      title.textContent = btn ? labelOf(btn) : "Separator";
+      title.textContent = sep ? "Separator" : labelOf(btn);
       text.appendChild(title);
-      if (btn && btn.hasAttribute(MARK)) {
+      if (btn && OURS.has(entry.id)) {
         const own = document.createElement("span");
         own.textContent = " (gfm-tidy)";
-        own.style.cssText =
-          "font-weight:400;font-size:11px;color:var(--fgColor-muted,GrayText)";
+        own.style.cssText = "font-weight:400;font-size:11px;color:" + MUTED;
         title.appendChild(own);
       }
       if (DESCRIPTIONS[entry.id]) {
         const blurb = document.createElement("span");
         blurb.textContent = DESCRIPTIONS[entry.id];
-        blurb.style.cssText =
-          "display:block;color:var(--fgColor-muted,GrayText);font-size:12px";
+        blurb.style.cssText = "display:block;font-size:12px;color:" + MUTED;
         text.appendChild(blurb);
       }
 
@@ -465,12 +543,16 @@
       return row;
     }
 
-    for (const entry of layoutFor(container)) list.appendChild(buildRow(entry));
+    const render = () =>
+      list.replaceChildren(...layoutFor(container, buttons).map(buildRow));
+    render();
 
     const addSeparator = document.createElement("button");
     addSeparator.type = "button";
     addSeparator.className = "btn";
     addSeparator.textContent = "Add separator";
+    // Nothing to clone from means the entry would store but never render.
+    addSeparator.disabled = !container.querySelector(DIVIDER);
     addSeparator.addEventListener("click", () => {
       list.appendChild(buildRow({ id: SEPARATOR, on: true }));
       commit();
@@ -481,13 +563,9 @@
     reset.className = "btn";
     reset.textContent = "Reset";
     reset.addEventListener("click", () => {
-      if (!confirm("Reset the toolbar to its original buttons and order?")) {
-        return;
-      }
-      GM_setValue(LAYOUT_KEY, "");
-      inject();
-      dialog.close();
-      configure();
+      if (!confirm("Reset the toolbar to its original order?")) return;
+      saveLayout(null);
+      render();
     });
 
     const done = document.createElement("button");
@@ -495,13 +573,12 @@
     // GitHub's own button classes, so they match the page and follow its theme.
     done.className = "btn-primary btn";
     done.textContent = "Done";
+    done.style.marginLeft = "auto";
     done.addEventListener("click", () => dialog.close());
 
-    const spacer = document.createElement("div");
-    spacer.style.flex = "1";
     const footer = document.createElement("div");
     footer.style.cssText = "display:flex;gap:8px;flex:none;margin-top:16px";
-    footer.append(addSeparator, reset, spacer, done);
+    footer.append(addSeparator, reset, done);
 
     dialog.append(heading, hint, list, footer);
     dialog.addEventListener("close", () => dialog.remove());
@@ -509,71 +586,6 @@
     dialog.showModal();
     dialog.focus();
   }
-
-  function actionOf(btn) {
-    // Our own buttons carry their name in MARK; GitHub's are in the analytics
-    // blob. Both end up as an upper-case action name.
-    const own = btn.getAttribute(MARK);
-    if (own) return own.toUpperCase();
-    try {
-      return (
-        JSON.parse(btn.getAttribute("data-analytics-event") || "{}").action ||
-        ""
-      );
-    } catch (err) {
-      return "";
-    }
-  }
-
-  const icon = (d) =>
-    '<svg class="octicon Button-visual" viewBox="0 0 16 16" width="16" height="16" ' +
-    'aria-hidden="true" fill="currentColor"><path d="' +
-    d +
-    '"/></svg>';
-
-  const BUTTONS = [
-    {
-      key: "unwrap",
-      label: "Unwrap",
-      icon: icon(
-        "M1 2.5h14V4H1zM1 12h14v1.5H1zM4.5 5.5 1.5 8l3 2.5V9h7v1.5L14.5 8l-3-2.5V7h-7z",
-      ),
-      fn: unwrap,
-    },
-    {
-      key: "dedent",
-      label: "Dedent",
-      icon: icon(
-        "M1 2h14v1.5H1zM1 12.5h14V14H1zM6.5 5.5h8.5V7H6.5zM6.5 9h8.5v1.5H6.5zM4.5 5.25 1.5 7.75l3 2.5z",
-      ),
-      fn: dedent,
-    },
-    {
-      key: "details",
-      label: "Details",
-      icon: icon("M2 4l4 3-4 3zM8 4h6v1.5H8zM8 9.5h6V11H8z"),
-      fn: detailsWrap,
-    },
-  ];
-
-  // Bold is the stable landmark. GitHub's current toolbar labels its buttons
-  // with data-md-button and an aria-labelledby <tool-tip>; the aria-label form
-  // is a fallback in case a future editor drops the data attribute.
-  const ANCHOR = 'button[data-md-button="bold"], button[aria-label="Bold"]';
-
-  // Attributes that would make a cloned button behave like the one it copies.
-  const STRIP = [
-    "data-md-button",
-    "data-hotkey",
-    "data-hotkey-scope",
-    "id",
-    "data-analytics-event",
-    "aria-labelledby",
-    "data-show-dialog-id",
-    "popovertarget",
-    "aria-controls",
-    "data-file-attachment-for",
-  ];
 
   // Resolved at click time, not injection time: the textarea can be remounted.
   function findTextarea(el) {
@@ -626,42 +638,40 @@
     ta.setSelectionRange(start, end);
     replaceSelection(ta, out.text);
 
-    const base = ta.selectionStart - out.text.length;
+    // The replacement began at start, so offsets are relative to it.
     if (out.selectionStart !== undefined) {
-      ta.setSelectionRange(base + out.selectionStart, base + out.selectionEnd);
+      ta.setSelectionRange(
+        start + out.selectionStart,
+        start + out.selectionEnd,
+      );
     } else {
-      ta.setSelectionRange(base, base + out.text.length);
+      ta.setSelectionRange(start, start + out.text.length);
     }
   }
 
-  // Clone GitHub's own toolbar item so we inherit its markup and styling,
-  // then strip everything that made the original behave like Bold.
-  let uid = 0;
+  let uid = 0; // ids must be unique, and a page can hold many toolbars
 
   // Clone GitHub's own toolbar item so we inherit its markup and styling,
   // then strip everything that made the original behave like Bold.
   function buildItem(slot, spec) {
     const item = slot.cloneNode(true);
-    const btn = item.matches("button") ? item : item.querySelector("button");
+    const btn = buttonIn(item);
     if (!btn) return null;
 
-    // Keep one of GitHub's <tool-tip> elements and rewire it, so hovering
-    // behaves like every other button: their styled bubble below the button
-    // rather than the browser's own title tooltip.
-    const tips = item.querySelectorAll("tool-tip");
-    for (let i = 1; i < tips.length; i++) tips[i].remove();
-    const tip = tips[0];
+    // Rewire GitHub's <tool-tip> rather than using a title attribute, so
+    // hovering gives their styled bubble below the button like every other.
+    const tip = item.querySelector("tool-tip");
 
     // Keep <action-bar>'s overflow bookkeeping away from our items.
     item.removeAttribute("data-targets");
     for (const attr of STRIP) btn.removeAttribute(attr);
 
-    const n = ++uid; // ids must be unique, and a page can hold many toolbars
+    const n = ++uid;
     btn.id = "gfm-tidy-button-" + n;
     btn.setAttribute(MARK, spec.key);
     btn.setAttribute("type", "button");
     btn.setAttribute("tabindex", "0");
-    btn.innerHTML = spec.icon;
+    btn.replaceChildren(svgIcon(spec.icon, "octicon Button-visual"));
 
     if (tip) {
       tip.id = "gfm-tidy-tooltip-" + n;
@@ -683,33 +693,21 @@
     return item;
   }
 
-  function buildDivider(container) {
-    const source = container.querySelector(".ActionBar-divider");
-    if (!source) return null; // no dividers in this editor, so don't invent one
-    const sep = source.cloneNode(true);
-    sep.removeAttribute("data-targets");
-    sep.setAttribute(MARK, "divider");
-    return sep;
-  }
-
   function inject() {
-    for (const anchor of document.querySelectorAll(ANCHOR)) {
-      const slot = anchor.closest(".ActionBar-item") || anchor;
-      const container = slot.parentElement;
-      if (!container) continue;
-      installStyle();
-      container.setAttribute(MANAGED, "");
-
-      if (!container.querySelector("[" + MARK + "]")) {
-        const sep = buildDivider(container);
-        if (sep) container.appendChild(sep);
+    for (const { slot, container } of containers()) {
+      if (!container.hasAttribute(MANAGED)) {
+        container.setAttribute(MANAGED, "");
+      }
+      // Only our own buttons answer this: a reused divider must not count, or
+      // one failed buildItem would lose the buttons for the session.
+      if (!container.querySelector("button[" + MARK + "]")) {
         for (const spec of BUTTONS) {
           const item = buildItem(slot, spec);
           if (item) container.appendChild(item);
         }
       }
       // Capture GitHub's order once our buttons are in it, before any move.
-      if (!defaultLayout) defaultLayout = readLayout(container);
+      if (!defaultLayout) defaultLayout = captureDefault(container);
       applyLayout(container);
     }
   }
@@ -718,6 +716,7 @@
     if (typeof GM_registerMenuCommand === "function") {
       GM_registerMenuCommand("Configure toolbar buttons", configure);
     }
+    installStyle();
     let queued = false;
     // inject() is idempotent, so the mutations it causes settle on the next pass.
     new MutationObserver(() => {
