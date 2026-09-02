@@ -1,10 +1,13 @@
 // ==UserScript==
 // @name         GFM Tidy
 // @namespace    https://github.com/ewels/gfm-tidy
-// @version      0.8.1
-// @description  Unwrap, dedent and <details>-wrap buttons in the GitHub markdown toolbar
+// @version      1.0.0
+// @description  Unwrap, dedent and <details> buttons for the GitHub markdown toolbar, and reorder or hide any button on it
 // @author       Phil Ewels
+// @license      MIT
 // @match        https://github.com/*
+// @homepageURL  https://github.com/ewels/gfm-tidy
+// @supportURL   https://github.com/ewels/gfm-tidy/issues
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand

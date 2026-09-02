@@ -1,6 +1,7 @@
 # gfm-tidy
 
-Three extra buttons in the GitHub markdown toolbar, next to bold and italic.
+Adds three buttons to the GitHub markdown toolbar, and lets you reorder or hide
+every button already on it.
 
 | Button  | What it does                                                                                                                  |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -11,7 +12,9 @@ Three extra buttons in the GitHub markdown toolbar, next to bold and italic.
 Unwrap is the main feature: GitHub renders single newlines as line breaks, so text wrapped at 80 columns reads badly in a comment. Unwrap leaves code fences, headings, tables, thematic breaks, explicit hard breaks and list structure alone, and unwraps wrapped list items and blockquotes correctly.
 
 Each button works on the selection, or on the whole comment box when nothing is
-selected. Edits go through the browser's own insert-text path, so undo still works.
+selected. Edits go through the browser's own insert-text path, so undo still
+works. The three buttons sit at the end of the toolbar, after a separator, until
+you move them.
 
 Works on issues, pull requests, review comments and discussions.
 
@@ -49,11 +52,22 @@ The layout is stored by the userscript manager rather than by the page, so it
 survives script updates and clearing site data, and you can edit it by hand in
 Tampermonkey under the script's Storage tab.
 
-## Tests
+## Development
+
+The whole thing is one file with no build step and no dependencies. Edit
+`gfm-tidy.user.js` and reload a GitHub page.
 
 ```sh
-node test.cjs     # the text transforms
+node test.cjs   # the text transforms: unwrap, dedent, details
+prek run -a     # prettier and the tests
 ```
+
+Bump `@version` in the header for any change you want installed copies to pick
+up: a userscript manager compares that field against `@updateURL` and updates
+only when the remote value is higher.
+
+CI runs `prek` on push and pull requests, so the same two hooks gate every
+change.
 
 ## Known limits
 
@@ -64,3 +78,12 @@ node test.cjs     # the text transforms
   for all of them.
 - Unwrap treats a line starting with `<` as an HTML block and leaves it alone,
   which also catches a paragraph that happens to start with an autolink.
+- Reordering uses HTML5 drag and drop, which needs a mouse. There is no
+  touch-friendly way to move a row.
+- Needs a manager with synchronous `GM_getValue`, which means Tampermonkey or
+  Violentmonkey. Greasemonkey's `GM.getValue` is promise-based and will not
+  work unchanged.
+
+## License
+
+[MIT](LICENSE)

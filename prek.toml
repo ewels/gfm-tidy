@@ -4,3 +4,9 @@
 repo = "https://github.com/rbubley/mirrors-prettier"
 rev = "v3.9.6"
 hooks = [{ id = "prettier" }]
+
+[[repos]]
+repo = "local"
+hooks = [
+    { id = "tests", name = "tests", entry = "node test.cjs", language = "system", files = "\\.(c?js)$", pass_filenames = false },
+]
