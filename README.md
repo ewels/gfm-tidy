@@ -26,21 +26,26 @@ Works on issues, pull requests, review comments and discussions.
    [`gfm-tidy.user.js`](https://raw.githubusercontent.com/ewels/gfm-tidy/main/gfm-tidy.user.js)
    and confirm the install prompt. Updates are picked up automatically.
 
-## Hiding stock buttons
+## Customising the toolbar
 
-The toolbar is crowded. To hide buttons you never use, open the Tampermonkey or
-Violentmonkey icon on any github.com tab and pick **Configure hidden buttons**.
-Enter a comma-separated list, or leave it empty to show everything. The change
-applies immediately, with no reload, so an unsent comment draft is safe.
+Open the Tampermonkey or Violentmonkey icon on any github.com tab and pick
+**Configure toolbar buttons**. Every button in the toolbar is listed with its
+icon, its name and what it does, including the three this script adds and the
+separators between groups.
 
-Nothing is hidden by default. The names are the ones GitHub puts in each
-button's `data-analytics-event`:
+- Drag a row by its handle to reorder the toolbar.
+- Switch a row off to hide that button.
+- **Add separator** appends a new divider to the bottom of the list; drag it
+  where you want it.
+- **Reset** restores GitHub's original buttons and order.
 
-`COPILOT`, `HEADING`, `BOLD`, `ITALIC`, `QUOTE`, `CODE`, `LINK`,
-`ORDERED_LIST`, `UNORDERED_LIST`, `TASK_LIST`, `ATTACH_FILES`, `MENTION`,
-`REFERENCE`, `SAVED_REPLIES`, `SLASH_COMMANDS`
+Changes apply immediately, with no reload, so an unsent comment draft is safe.
 
-The setting is stored by the userscript manager rather than by the page, so it
+Nothing is hidden or moved by default. The panel reads the live toolbar rather
+than a hardcoded list, so buttons GitHub adds or removes are picked up on their
+own, and a saved layout survives them changing the toolbar.
+
+The layout is stored by the userscript manager rather than by the page, so it
 survives script updates and clearing site data, and you can edit it by hand in
 Tampermonkey under the script's Storage tab.
 
@@ -52,7 +57,10 @@ node test.cjs     # the text transforms
 
 ## Known limits
 
-- The toolbar moves buttons into an overflow menu on narrow viewports. These
-  three stay visible instead, so they can crowd a very narrow window.
+- GitHub's toolbar normally moves buttons it thinks will not fit into a `...`
+  overflow menu. Since you are choosing what the toolbar holds, that is
+  overridden: every button you leave switched on stays visible, the `...` menu
+  is hidden, and the toolbar wraps onto a second row if a window is too narrow
+  for all of them.
 - Unwrap treats a line starting with `<` as an HTML block and leaves it alone,
   which also catches a paragraph that happens to start with an autolink.

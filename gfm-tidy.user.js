@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GFM Tidy
 // @namespace    https://github.com/ewels/gfm-tidy
-// @version      0.3.0
+// @version      0.8.1
 // @description  Unwrap, dedent and <details>-wrap buttons in the GitHub markdown toolbar
 // @author       Phil Ewels
 // @match        https://github.com/*
@@ -139,51 +139,379 @@
   // ---------------------------------------------------------------- dom layer
 
   const MARK = "data-gfm-tidy";
-  const HIDE_KEY = "hide";
   const HIDDEN = "data-gfm-tidy-hidden";
+  const MANAGED = "data-gfm-tidy-managed";
+  const LAYOUT_KEY = "layout";
+  const SEPARATOR = "|";
+  const HOME = "https://github.com/ewels/gfm-tidy";
+  const BUTTON_SELECTOR = "button[data-analytics-event], button[" + MARK + "]";
 
-  // Every toolbar button names itself in its data-analytics-event; those names
-  // are the config's vocabulary.
-  const STOCK = [
-    "COPILOT",
-    "HEADING",
-    "BOLD",
-    "ITALIC",
-    "QUOTE",
-    "CODE",
-    "LINK",
-    "ORDERED_LIST",
-    "UNORDERED_LIST",
-    "TASK_LIST",
-    "ATTACH_FILES",
-    "MENTION",
-    "REFERENCE",
-    "SAVED_REPLIES",
-    "SLASH_COMMANDS",
-  ];
+  // Short explanations for the settings panel. Titles and icons are read from
+  // the live toolbar, so only the prose lives here; an unrecognised button just
+  // shows no description rather than breaking the panel.
+  const DESCRIPTIONS = {
+    COPILOT: "Ask Copilot to draft or summarise.",
+    HEADING: "Turn the current line into a heading.",
+    BOLD: "Bold the selected text.",
+    ITALIC: "Italicise the selected text.",
+    QUOTE: "Quote the selected text.",
+    CODE: "Format the selection as code.",
+    LINK: "Turn the selection into a link.",
+    ORDERED_LIST: "Start a numbered list.",
+    UNORDERED_LIST: "Start a bulleted list.",
+    TASK_LIST: "Start a checkbox task list.",
+    ATTACH_FILES: "Attach a file or image.",
+    MENTION: "Insert an @username mention.",
+    REFERENCE: "Link to another issue or pull request.",
+    SAVED_REPLIES: "Insert one of your saved replies.",
+    SLASH_COMMANDS: "Open the slash command menu.",
+    UNWRAP: "Join hard-wrapped lines into full-length paragraphs.",
+    DEDENT: "Strip the indentation shared by every line.",
+    DETAILS: "Wrap the selection in a collapsible box.",
+    [SEPARATOR]: "A divider between groups of buttons.",
+  };
 
-  // Stock buttons the user has chosen to hide. Empty by default.
-  function hideList() {
-    if (typeof GM_getValue !== "function") return [];
-    return String(GM_getValue(HIDE_KEY, ""))
-      .toUpperCase()
-      .split(/[\s,]+/)
-      .filter(Boolean);
+  const GRABBER =
+    "M10 13a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0-4a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0-4a1 1 0 1 1 0-2 1 1 0 0 1 0 2ZM6 13a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0-4a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0-4a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z";
+  const SEP_ICON = "M7.25 1.5h1.5v13h-1.5z";
+
+  // The toolbar as GitHub first rendered it, captured before anything is moved.
+  // This is what Reset restores, so the defaults never need storing.
+  let defaultLayout = null;
+
+  function svgIcon(d) {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("aria-hidden", "true");
+    svg.style.cssText = "flex:none;width:16px;height:16px;fill:currentColor";
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d);
+    svg.appendChild(path);
+    return svg;
+  }
+
+  // <action-bar> hides items it thinks overflow by setting inline visibility,
+  // and it gets that calculation badly wrong once we add items it does not
+  // manage and hide items it does: it hid almost the whole toolbar. We curate
+  // the toolbar now, so override it outright. A stylesheet beats its inline
+  // styles, and wrapping is a friendlier overflow than its kebab menu.
+  function installStyle() {
+    if (document.getElementById("gfm-tidy-style")) return;
+    const style = document.createElement("style");
+    style.id = "gfm-tidy-style";
+    style.textContent =
+      "[" +
+      MANAGED +
+      "]{flex-wrap:wrap}[" +
+      MANAGED +
+      "] .ActionBar-item{visibility:visible!important}[" +
+      HIDDEN +
+      "]{display:none!important}[" +
+      MANAGED +
+      "] ~ .ActionBar-more-menu{display:none!important}";
+    document.head.appendChild(style);
+  }
+
+  function storedLayout() {
+    if (typeof GM_getValue !== "function") return null;
+    try {
+      const raw = GM_getValue(LAYOUT_KEY, "");
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      return null; // corrupt value, fall back to the defaults
+    }
+  }
+
+  function saveLayout(layout) {
+    GM_setValue(LAYOUT_KEY, JSON.stringify(layout));
+    inject();
+  }
+
+  function buttonFor(container, action) {
+    for (const btn of container.querySelectorAll(BUTTON_SELECTOR)) {
+      if (actionOf(btn) === action) return btn;
+    }
+    return null;
+  }
+
+  function itemFor(container, action) {
+    const btn = buttonFor(container, action);
+    return btn && (btn.closest(".ActionBar-item") || btn);
+  }
+
+  // A container's present order, read straight off the DOM.
+  function readLayout(container) {
+    const layout = [];
+    for (const item of container.children) {
+      if (item.classList.contains("ActionBar-divider")) {
+        layout.push({ id: SEPARATOR, on: true });
+        continue;
+      }
+      const btn = item.matches("button") ? item : item.querySelector("button");
+      const action = btn && actionOf(btn);
+      if (action) layout.push({ id: action, on: true });
+    }
+    return layout;
+  }
+
+  // Drop entries whose button has gone and append ones GitHub has added, so a
+  // saved layout survives GitHub changing its toolbar.
+  function reconcile(layout, container) {
+    const live = [];
+    for (const btn of container.querySelectorAll(BUTTON_SELECTOR)) {
+      const action = actionOf(btn);
+      if (action && !live.includes(action)) live.push(action);
+    }
+    const out = layout.filter((e) => e.id === SEPARATOR || live.includes(e.id));
+    for (const action of live) {
+      if (!out.some((e) => e.id === action)) out.push({ id: action, on: true });
+    }
+    return out;
+  }
+
+  function layoutFor(container) {
+    return reconcile(
+      storedLayout() || defaultLayout || readLayout(container),
+      container,
+    );
+  }
+
+  function applyLayout(container) {
+    // Separators are interchangeable, so reuse the ones already present and
+    // clone more only when the layout asks for more than GitHub shipped.
+    const spare = [...container.querySelectorAll(".ActionBar-divider")];
+    const wanted = [];
+    let next = 0;
+
+    for (const entry of layoutFor(container)) {
+      let item;
+      if (entry.id === SEPARATOR) {
+        item = spare[next++] || (spare[0] && spare[0].cloneNode(true));
+        if (!item) continue;
+        item.setAttribute(MARK, "divider");
+      } else {
+        item = itemFor(container, entry.id);
+      }
+      if (!item) continue;
+
+      if (entry.on) item.removeAttribute(HIDDEN);
+      else item.setAttribute(HIDDEN, "");
+      wanted.push(item);
+    }
+    for (; next < spare.length; next++) spare[next].setAttribute(HIDDEN, "");
+
+    // Only touch the DOM when the order is actually wrong. Moving a node fires
+    // a mutation even when it lands where it already was, which would have the
+    // observer calling us forever.
+    const current = [...container.children].filter((el) => wanted.includes(el));
+    const ordered =
+      current.length === wanted.length &&
+      current.every((el, i) => el === wanted[i]);
+    if (!ordered) for (const item of wanted) container.appendChild(item);
+  }
+
+  // GitHub keeps each button's visible name in a sibling <tool-tip>, so the
+  // panel can show the same words the tooltips do, in the same language.
+  function labelOf(btn) {
+    const id = btn.getAttribute("aria-labelledby");
+    const tip = id && document.getElementById(id);
+    return (
+      (tip && tip.textContent.trim()) ||
+      btn.getAttribute("aria-label") ||
+      actionOf(btn)
+    );
   }
 
   function configure() {
-    const answer = prompt(
-      "Hide these stock toolbar buttons, comma separated. Leave empty to show all." +
-        "\n\n" +
-        STOCK.join(", "),
-      hideList().join(", "),
-    );
-    if (answer === null) return;
-    GM_setValue(HIDE_KEY, answer.trim());
-    inject(); // applies straight away, so no reload and no lost draft
+    const anchor = document.querySelector(ANCHOR);
+    const container =
+      anchor && (anchor.closest(".ActionBar-item") || anchor).parentElement;
+    if (!container) {
+      alert("Open a GitHub page with a comment box, then try again.");
+      return;
+    }
+
+    const dialog = document.createElement("dialog");
+    // showModal() otherwise focuses the first focusable child, drawing a
+    // focus ring on the repo link. Focus the container instead, so no ring
+    // shows until the user actually tabs.
+    dialog.tabIndex = -1;
+    dialog.style.cssText =
+      "padding:16px 20px;width:min(90vw,30rem);border-radius:12px;" +
+      // cap the height and scroll the list, so the footer stays reachable
+      "max-height:85vh;display:flex;flex-direction:column;outline:none;" +
+      "font:14px/1.4 system-ui,sans-serif;" +
+      "border:1px solid var(--borderColor-default,#d0d7de);" +
+      "background:var(--bgColor-default,Canvas);" +
+      "color:var(--fgColor-default,CanvasText)";
+
+    const heading = document.createElement("h2");
+    heading.textContent = "GFM Tidy";
+    heading.style.cssText = "margin:0;font-size:16px";
+    const link = document.createElement("a");
+    link.href = HOME;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "ewels/gfm-tidy";
+    link.style.cssText = "margin-left:8px;font-size:12px;font-weight:400";
+    heading.appendChild(link);
+
+    const hint = document.createElement("p");
+    hint.textContent = "Drag to reorder. Switch off what you never use.";
+    hint.style.cssText =
+      "margin:4px 0 8px;flex:none;font-size:12px;color:var(--fgColor-muted,GrayText)";
+
+    const list = document.createElement("div");
+    // padding-right keeps the checkboxes clear of the scrollbar. Overlay
+    // scrollbars draw over content and take no width, so scrollbar-gutter
+    // would not help here.
+    list.style.cssText =
+      "flex:1;min-height:0;overflow-y:auto;padding-right:12px";
+    let dragging = null;
+
+    const commit = () =>
+      saveLayout(
+        [...list.children].map((row) => ({
+          id: row.dataset.id,
+          on: row.querySelector("input").checked,
+        })),
+      );
+
+    function buildRow(entry) {
+      const row = document.createElement("div");
+      row.dataset.id = entry.id;
+      row.style.cssText =
+        "display:flex;align-items:center;gap:10px;padding:8px 0;" +
+        "border-top:1px solid var(--borderColor-muted,#d8dee4)" +
+        // separators are structure rather than features, so let them recede
+        (entry.id === SEPARATOR ? ";opacity:0.65" : "");
+
+      const handle = svgIcon(GRABBER);
+      handle.style.cursor = "grab";
+      handle.style.color = "var(--fgColor-muted,GrayText)";
+      // draggable only while the handle is held, so the row still selects text
+      // and the drag image is the whole row rather than the handle alone.
+      handle.addEventListener("mousedown", () => {
+        row.draggable = true;
+      });
+      row.addEventListener("dragstart", (event) => {
+        dragging = row;
+        row.style.opacity = "0.4";
+        event.dataTransfer.effectAllowed = "move";
+      });
+      row.addEventListener("dragend", () => {
+        row.style.opacity = "";
+        row.draggable = false;
+        dragging = null;
+        commit();
+      });
+      row.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        if (!dragging || dragging === row) return;
+        const box = row.getBoundingClientRect();
+        const below = event.clientY > box.top + box.height / 2;
+        list.insertBefore(dragging, below ? row.nextSibling : row);
+      });
+
+      const btn =
+        entry.id === SEPARATOR ? null : buttonFor(container, entry.id);
+      const label = document.createElement("label");
+      label.style.cssText =
+        "flex:1;display:flex;align-items:center;gap:10px;cursor:pointer";
+
+      const source = btn && btn.querySelector("svg");
+      if (source) {
+        const copy = source.cloneNode(true);
+        copy.removeAttribute("class"); // drop Primer's button-specific sizing
+        copy.style.cssText =
+          "flex:none;width:16px;height:16px;fill:currentColor";
+        label.appendChild(copy);
+      } else {
+        label.appendChild(svgIcon(SEP_ICON));
+      }
+
+      const text = document.createElement("span");
+      text.style.cssText = "flex:1";
+      const title = document.createElement("strong");
+      title.textContent = btn ? labelOf(btn) : "Separator";
+      text.appendChild(title);
+      if (btn && btn.hasAttribute(MARK)) {
+        const own = document.createElement("span");
+        own.textContent = " (gfm-tidy)";
+        own.style.cssText =
+          "font-weight:400;font-size:11px;color:var(--fgColor-muted,GrayText)";
+        title.appendChild(own);
+      }
+      if (DESCRIPTIONS[entry.id]) {
+        const blurb = document.createElement("span");
+        blurb.textContent = DESCRIPTIONS[entry.id];
+        blurb.style.cssText =
+          "display:block;color:var(--fgColor-muted,GrayText);font-size:12px";
+        text.appendChild(blurb);
+      }
+
+      const toggle = document.createElement("input");
+      toggle.type = "checkbox";
+      toggle.checked = entry.on;
+      toggle.style.cssText = "flex:none;width:16px;height:16px";
+      toggle.addEventListener("change", commit);
+
+      label.append(text, toggle);
+      row.append(handle, label);
+      return row;
+    }
+
+    for (const entry of layoutFor(container)) list.appendChild(buildRow(entry));
+
+    const addSeparator = document.createElement("button");
+    addSeparator.type = "button";
+    addSeparator.className = "btn";
+    addSeparator.textContent = "Add separator";
+    addSeparator.addEventListener("click", () => {
+      list.appendChild(buildRow({ id: SEPARATOR, on: true }));
+      commit();
+    });
+
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "btn";
+    reset.textContent = "Reset";
+    reset.addEventListener("click", () => {
+      if (!confirm("Reset the toolbar to its original buttons and order?")) {
+        return;
+      }
+      GM_setValue(LAYOUT_KEY, "");
+      inject();
+      dialog.close();
+      configure();
+    });
+
+    const done = document.createElement("button");
+    done.type = "button";
+    // GitHub's own button classes, so they match the page and follow its theme.
+    done.className = "btn-primary btn";
+    done.textContent = "Done";
+    done.addEventListener("click", () => dialog.close());
+
+    const spacer = document.createElement("div");
+    spacer.style.flex = "1";
+    const footer = document.createElement("div");
+    footer.style.cssText = "display:flex;gap:8px;flex:none;margin-top:16px";
+    footer.append(addSeparator, reset, spacer, done);
+
+    dialog.append(heading, hint, list, footer);
+    dialog.addEventListener("close", () => dialog.remove());
+    document.body.appendChild(dialog);
+    dialog.showModal();
+    dialog.focus();
   }
 
   function actionOf(btn) {
+    // Our own buttons carry their name in MARK; GitHub's are in the analytics
+    // blob. Both end up as an upper-case action name.
+    const own = btn.getAttribute(MARK);
+    if (own) return own.toUpperCase();
     try {
       return (
         JSON.parse(btn.getAttribute("data-analytics-event") || "{}").action ||
@@ -203,7 +531,7 @@
   const BUTTONS = [
     {
       key: "unwrap",
-      label: "Unwrap hard-wrapped lines",
+      label: "Unwrap",
       icon: icon(
         "M1 2.5h14V4H1zM1 12h14v1.5H1zM4.5 5.5 1.5 8l3 2.5V9h7v1.5L14.5 8l-3-2.5V7h-7z",
       ),
@@ -211,7 +539,7 @@
     },
     {
       key: "dedent",
-      label: "Remove common indentation",
+      label: "Dedent",
       icon: icon(
         "M1 2h14v1.5H1zM1 12.5h14V14H1zM6.5 5.5h8.5V7H6.5zM6.5 9h8.5v1.5H6.5zM4.5 5.25 1.5 7.75l3 2.5z",
       ),
@@ -219,7 +547,7 @@
     },
     {
       key: "details",
-      label: "Wrap in a <details> box",
+      label: "Details",
       icon: icon("M2 4l4 3-4 3zM8 4h6v1.5H8zM8 9.5h6V11H8z"),
       fn: detailsWrap,
     },
@@ -305,22 +633,45 @@
 
   // Clone GitHub's own toolbar item so we inherit its markup and styling,
   // then strip everything that made the original behave like Bold.
+  let uid = 0;
+
+  // Clone GitHub's own toolbar item so we inherit its markup and styling,
+  // then strip everything that made the original behave like Bold.
   function buildItem(slot, spec) {
     const item = slot.cloneNode(true);
-    const btn = item.tagName === "BUTTON" ? item : item.querySelector("button");
+    const btn = item.matches("button") ? item : item.querySelector("button");
     if (!btn) return null;
 
-    for (const tip of item.querySelectorAll("tool-tip")) tip.remove();
+    // Keep one of GitHub's <tool-tip> elements and rewire it, so hovering
+    // behaves like every other button: their styled bubble below the button
+    // rather than the browser's own title tooltip.
+    const tips = item.querySelectorAll("tool-tip");
+    for (let i = 1; i < tips.length; i++) tips[i].remove();
+    const tip = tips[0];
+
     // Keep <action-bar>'s overflow bookkeeping away from our items.
     item.removeAttribute("data-targets");
     for (const attr of STRIP) btn.removeAttribute(attr);
 
+    const n = ++uid; // ids must be unique, and a page can hold many toolbars
+    btn.id = "gfm-tidy-button-" + n;
     btn.setAttribute(MARK, spec.key);
     btn.setAttribute("type", "button");
-    btn.setAttribute("aria-label", spec.label);
-    btn.setAttribute("title", spec.label);
     btn.setAttribute("tabindex", "0");
     btn.innerHTML = spec.icon;
+
+    if (tip) {
+      tip.id = "gfm-tidy-tooltip-" + n;
+      tip.setAttribute("for", btn.id);
+      tip.removeAttribute("style"); // stale position from the button we copied
+      tip.setAttribute("data-direction", "s"); // below the button, like the rest
+      tip.textContent = spec.label;
+      btn.setAttribute("aria-labelledby", tip.id);
+    } else {
+      btn.setAttribute("aria-label", spec.label);
+      btn.setAttribute("title", spec.label);
+    }
+
     btn.addEventListener("click", (event) => {
       event.preventDefault();
       const ta = findTextarea(btn);
@@ -329,8 +680,6 @@
     return item;
   }
 
-  // Reuse GitHub's own divider rather than inventing one, so it matches the
-  // dividers already between the toolbar's groups.
   function buildDivider(container) {
     const source = container.querySelector(".ActionBar-divider");
     if (!source) return null; // no dividers in this editor, so don't invent one
@@ -340,46 +689,31 @@
     return sep;
   }
 
-  function hideStock(container) {
-    const hidden = hideList();
-    for (const btn of container.querySelectorAll(
-      "button[data-analytics-event]",
-    )) {
-      const item = btn.closest(".ActionBar-item") || btn;
-      const hide = hidden.includes(actionOf(btn));
-      // Leave buttons we never hid alone, so we only ever undo our own work.
-      if (!hide && !item.hasAttribute(HIDDEN)) continue;
-
-      item.style.display = hide ? "none" : "";
-      if (hide) item.setAttribute(HIDDEN, "");
-      else item.removeAttribute(HIDDEN);
-      // The same button also has an entry in the overflow menu.
-      const spill =
-        btn.id && document.querySelector('[data-for="' + btn.id + '"]');
-      if (spill) spill.style.display = hide ? "none" : "";
-    }
-  }
-
   function inject() {
     for (const anchor of document.querySelectorAll(ANCHOR)) {
       const slot = anchor.closest(".ActionBar-item") || anchor;
       const container = slot.parentElement;
       if (!container) continue;
-      hideStock(container);
-      if (container.querySelector("[" + MARK + "]")) continue;
+      installStyle();
+      container.setAttribute(MANAGED, "");
 
-      const sep = buildDivider(container);
-      if (sep) container.appendChild(sep);
-      for (const spec of BUTTONS) {
-        const item = buildItem(slot, spec);
-        if (item) container.appendChild(item);
+      if (!container.querySelector("[" + MARK + "]")) {
+        const sep = buildDivider(container);
+        if (sep) container.appendChild(sep);
+        for (const spec of BUTTONS) {
+          const item = buildItem(slot, spec);
+          if (item) container.appendChild(item);
+        }
       }
+      // Capture GitHub's order once our buttons are in it, before any move.
+      if (!defaultLayout) defaultLayout = readLayout(container);
+      applyLayout(container);
     }
   }
 
   if (typeof document !== "undefined") {
     if (typeof GM_registerMenuCommand === "function") {
-      GM_registerMenuCommand("Configure hidden buttons", configure);
+      GM_registerMenuCommand("Configure toolbar buttons", configure);
     }
     let queued = false;
     // inject() is idempotent, so the mutations it causes settle on the next pass.
