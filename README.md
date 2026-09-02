@@ -4,8 +4,7 @@ Extra buttons for the GitHub markdown toolbar, and control over which of
 GitHub's own buttons you keep. Works on issues, pull requests, review comments
 and discussions.
 
-The transforms exist because of how LLMs write. Paste output from a model, or
-let one comment on GitHub itself, and you get:
+AI agents often write annoying GitHub issues, PR descriptions and comments:
 
 - **Text hard-wrapped at 80 columns.** GitHub flavoured markdown renders a
   single line break as a `<br>`, unlike most markdown, so every wrap shows up in
@@ -67,11 +66,9 @@ buttons**.
 - **Reset** restores the default order: GitHub's own, with the added buttons in
   groups.
 
-Changes apply immediately with no reload, so an unsent draft is safe. The layout
-is stored by the userscript manager rather than the page, so it survives script
-updates and clearing site data, and you can edit it by hand under the script's
-Storage tab. The panel reads the live toolbar, so buttons GitHub adds or removes
-are picked up on their own.
+Changes apply immediately with no reload. The layout is stored by the userscript
+manager. The panel reads the live toolbar, so buttons GitHub adds or removes are
+picked up on their own.
 
 ## Development
 
@@ -90,8 +87,7 @@ Primer React one on issues. Open either in a browser to watch the checks run.
 Both assert the same expected toolbar order, which is what keeps the two editors
 consistent.
 
-Bump `@version` for anything you want installed copies to pick up: managers only
-update when the remote value is higher.
+Bump `@version` when ready.
 
 ## Known limits
 
