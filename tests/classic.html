@@ -1,0 +1,197 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>gfm-tidy — classic editor fixture</title>
+<!-- Trimmed copy of the toolbar GitHub renders on pull requests and
+     discussions. Open in a browser: the checks run on load. -->
+<style>
+  body {
+    font:
+      13px ui-monospace,
+      monospace;
+    margin: 2rem;
+  }
+  .ActionBar-item-container {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+  }
+  .ActionBar-divider {
+    width: 1px;
+    height: 20px;
+    border: 0;
+    background: #d0d7de;
+    margin: 0 4px;
+  }
+  .Button {
+    padding: 5px;
+    border: 1px solid #d0d7de;
+    background: #f6f8fa;
+    border-radius: 6px;
+  }
+  tool-tip {
+    display: none;
+  }
+  textarea {
+    width: 40rem;
+    height: 5rem;
+  }
+  #results {
+    white-space: pre;
+    margin-top: 1rem;
+  }
+</style>
+
+<form>
+  <markdown-toolbar for="ta" class="CommentBox-toolbar">
+    <action-bar role="toolbar" class="ActionBar">
+      <div
+        data-target="action-bar.itemContainer"
+        class="ActionBar-item-container"
+        id="bar"
+      ></div>
+      <action-menu class="ActionBar-more-menu"
+        ><button type="button">…</button></action-menu
+      >
+    </action-bar>
+  </markdown-toolbar>
+  <textarea id="ta"></textarea>
+</form>
+<div id="results">running…</div>
+
+<script src="harness.js"></script>
+<script>
+  const { BUTTONS, PATH, gmStub } = window.gfmTest;
+  let n = 0;
+  const item = ([icon, label]) => {
+    const id = "b" + ++n;
+    return `<div data-targets="action-bar.items" class="ActionBar-item"><button
+      id="${id}" data-md-button="${icon}" data-hotkey="Meta+b"
+      data-analytics-event='{"category":"comment_box","action":"LEGACY"}'
+      aria-labelledby="t${id}" type="button" class="Button Button--iconOnly" tabindex="-1"><svg
+      class="octicon octicon-${icon} Button-visual" viewBox="0 0 16 16" width="16" height="16"
+      aria-hidden="true"><path d="${PATH}"/></svg></button><tool-tip id="t${id}" for="${id}"
+      role="tooltip">${label}</tool-tip></div>`;
+  };
+  const rule =
+    '<hr role="presentation" data-targets="action-bar.items" class="ActionBar-item ActionBar-divider">';
+  // GitHub's own dividers, in its own positions: the script must discard these
+  // and place groups from DEFAULT_ORDER instead.
+  document.getElementById("bar").innerHTML =
+    BUTTONS.slice(0, 6).map(item).join("") +
+    rule +
+    BUTTONS.slice(6, 9).map(item).join("") +
+    rule +
+    BUTTONS.slice(9).map(item).join("");
+  gmStub();
+</script>
+
+<script src="../gfm-tidy.user.js"></script>
+
+<script>
+  (async () => {
+    const t = window.gfmTest;
+    const bar = document.getElementById("bar");
+    const ta = document.getElementById("ta");
+    const ours = (key) => document.querySelector(`[data-gfm-tidy="${key}"]`);
+
+    t.check(
+      "nine buttons injected",
+      document.querySelectorAll("button[data-gfm-tidy]").length,
+      9,
+    );
+    t.check(
+      "container is managed",
+      bar.hasAttribute("data-gfm-tidy-managed"),
+      true,
+    );
+    t.check(
+      "classic is not marked as React",
+      bar.hasAttribute("data-gfm-tidy-react"),
+      false,
+    );
+    t.check(
+      "order matches the shared expectation",
+      t.shown(bar),
+      t.EXPECTED_ORDER,
+    );
+
+    // The trap: a clone that keeps data-md-button also applies bold.
+    t.check(
+      "clone dropped data-md-button",
+      ours("UNWRAP").hasAttribute("data-md-button"),
+      false,
+    );
+    t.check(
+      "clone dropped the borrowed hotkey",
+      ours("UNWRAP").hasAttribute("data-hotkey"),
+      false,
+    );
+    const tip = document.getElementById(
+      ours("UNWRAP").getAttribute("aria-labelledby"),
+    );
+    t.check(
+      "tooltip rewired to our own text",
+      tip && tip.textContent,
+      "Unwrap",
+    );
+    t.check(
+      "tooltip points back at our button",
+      tip && tip.getAttribute("for"),
+      ours("UNWRAP").id,
+    );
+    t.check(
+      "no browser title tooltip as well",
+      ours("UNWRAP").hasAttribute("title"),
+      false,
+    );
+
+    const off = (icon) =>
+      document
+        .querySelector(`.octicon-${icon}`)
+        .closest(".ActionBar-item")
+        .hasAttribute("data-gfm-tidy-hidden");
+    t.check("Bold hidden on a fresh install", off("bold"), true);
+    t.check(
+      "Reference hidden on a fresh install",
+      off("cross-reference"),
+      true,
+    );
+    t.check("Code left alone", off("code"), false);
+
+    const run = (key, value, start, end) => {
+      ta.value = value;
+      ta.focus();
+      ta.setSelectionRange(
+        start === undefined ? 0 : start,
+        end === undefined ? 0 : end,
+      );
+      ours(key).click();
+      return ta.value;
+    };
+    t.check(
+      "unwrap joins hard-wrapped lines",
+      run("UNWRAP", "one\ntwo"),
+      "one two",
+    );
+    t.check(
+      "alert inserts its skeleton",
+      run("ALERT_NOTE", ""),
+      "> [!NOTE]\n> \n",
+    );
+    run("DETAILS", "body", 0, 4);
+    t.check(
+      "details leaves the summary selected",
+      ta.value.slice(ta.selectionStart, ta.selectionEnd),
+      "Details",
+    );
+
+    await t.settle();
+    t.check(
+      "no duplicates after a re-render",
+      document.querySelectorAll("button[data-gfm-tidy]").length,
+      9,
+    );
+    t.check("order stable after a re-render", t.shown(bar), t.EXPECTED_ORDER);
+    t.report();
+  })();
+</script>

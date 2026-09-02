@@ -163,17 +163,32 @@ is the only route that preserves the native undo stack and fires the events
 GitHub's autosize and preview listen for; `replaceSelection` has a fallback that
 loses undo.
 
-## Testing DOM changes
+## Tests
 
-There is no DOM test harness — a `fixture.html` existed and was deliberately
-deleted as not worth its keep. For DOM work, build a throwaway fixture in the
-scratchpad from real GitHub markup, drive it with `agent-browser`, and verify on
-a real GitHub page before claiming it works.
+`tests/test.cjs` covers the pure transforms. `tests/classic.html` and
+`tests/react.html` cover the DOM layer against trimmed copies of both toolbars;
+they assert in the page, so they can be opened in a browser directly, and
+`tests/fixtures.py` runs them in headless Chrome for CI. `prek run -a` runs all
+three.
 
-Two traps found the hard way: CDP synthetic mouse events do **not** trigger
-Chrome's HTML5 drag and drop (dispatch real `DragEvent`s with a `DataTransfer`
-instead), and Primer's classes and CSS variables only exist on github.com, so a
-local fixture renders buttons unstyled.
+**Both fixtures assert the same expected order** (`EXPECTED_ORDER` in
+`tests/harness.js`). That is the point of them: the toolbar has to look the same
+whichever editor GitHub used, and that guarantee is easy to break by accident.
+
+Two things the fixtures must stub before loading the userscript, both in
+`harness.js`: the `GM_*` storage API, and `requestAnimationFrame` — headless
+Chrome paints no frames, so rAF never fires and the script's observer debounce
+would never run. Timers do fire and are equivalent here.
+
+The mock markup is worth keeping honest, because a fixture that has drifted from
+GitHub proves nothing. Two details that were wrong once and cost real time:
+React's Saved replies button is a child of the _toolbar wrapper_, not a sibling
+of it, and the classic toolbar nests toolbar and textarea in a shared `<form>`,
+which is what lets `findTextarea`'s ancestor walk reach it.
+
+Also: CDP synthetic mouse events do **not** trigger Chrome's HTML5 drag and
+drop, so the panel's reordering can only be exercised by dispatching real
+`DragEvent`s with a `DataTransfer`.
 
 ## Repo conventions
 

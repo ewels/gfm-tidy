@@ -461,8 +461,14 @@
     // Saved replies sits outside the ActionBar, as a direct child of the
     // toolbar wrapper, so the toolbar would otherwise differ between issues
     // and pull requests. Idempotent: once adopted it is inside the bar.
-    for (const btn of bar.parentElement.children) {
-      if (btn.tagName === "BUTTON" && actionOf(btn)) container.appendChild(btn);
+    // Snapshot: appending removes the node from the live collection.
+    for (const stray of [...bar.parentElement.children]) {
+      if (stray.tagName !== "BUTTON" || !actionOf(stray)) continue;
+      const tip = stray.nextElementSibling;
+      container.appendChild(stray);
+      if (tip && tip.matches('[data-component="Tooltip"]')) {
+        container.appendChild(tip);
+      }
     }
 
     // Some buttons are nested in group wrappers. Any reorder pulls them out

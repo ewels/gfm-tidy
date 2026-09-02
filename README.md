@@ -81,16 +81,24 @@ The whole thing is one file with no build step and no dependencies. Edit
 `gfm-tidy.user.js` and reload a GitHub page.
 
 ```sh
-node test.cjs   # the text transforms: unwrap, dedent, details, alerts
-prek run -a     # prettier and the tests
+node tests/test.cjs       # the text transforms
+python3 tests/fixtures.py # the toolbar, in headless Chrome
+prek run -a               # all three, the same hooks CI runs
 ```
+
+`tests/classic.html` and `tests/react.html` are trimmed copies of the two
+toolbars GitHub renders — the classic one on pull requests and discussions, the
+Primer React one on issues. Each asserts in the page and can simply be opened in
+a browser; `tests/fixtures.py` runs both in headless Chrome and fails on any
+failed check. Both assert the _same_ expected toolbar order, which is what keeps
+the two editors consistent.
 
 Bump `@version` in the header for any change you want installed copies to pick
 up: a userscript manager compares that field against `@updateURL` and updates
 only when the remote value is higher.
 
-CI runs `prek` on push and pull requests, so the same two hooks gate every
-change.
+CI runs `prek` on push and pull requests, so the same three hooks gate every
+change. The fixture runner needs Chrome, which GitHub's runners already have.
 
 ## Known limits
 

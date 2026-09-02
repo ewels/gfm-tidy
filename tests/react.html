@@ -1,0 +1,237 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>gfm-tidy — React editor fixture</title>
+<!-- Trimmed copy of the Primer React toolbar GitHub renders on issues. Open in
+     a browser: the checks run on load. -->
+<style>
+  body {
+    font:
+      13px ui-monospace,
+      monospace;
+    margin: 2rem;
+  }
+  .prc-ActionBar-OverflowContainer-x {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+  }
+  .prc-ActionBar-Group-x {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+  }
+  .prc-ActionBar-Divider-x {
+    width: 1px;
+    height: 20px;
+    background: #d0d7de;
+  }
+  button {
+    padding: 5px;
+    border: 1px solid #d0d7de;
+    background: #f6f8fa;
+    border-radius: 6px;
+  }
+  [data-component="Tooltip"] {
+    display: none;
+  }
+  textarea {
+    width: 40rem;
+    height: 5rem;
+  }
+  #results {
+    white-space: pre;
+    margin-top: 1rem;
+  }
+</style>
+
+<form>
+  <!-- Decoy: the real page ships this hidden, with EMPTY md-* elements. It is
+       the first <markdown-toolbar> on the page and holds no buttons at all. -->
+  <markdown-toolbar for="ta" style="display: none">
+    <md-header></md-header><md-bold></md-bold><md-italic></md-italic>
+  </markdown-toolbar>
+
+  <div class="MarkdownEditor-writeWrapper">
+    <div class="MarkdownEditor-header">
+      <div class="Toolbar-toolbar">
+        <div class="prc-ActionBar-Nav-x" data-component="ActionBar">
+          <div
+            role="toolbar"
+            class="prc-ActionBar-List-x"
+            data-has-overflow="false"
+          >
+            <div class="prc-ActionBar-OverflowContainer-x" id="bar">
+              <div class="prc-ActionBar-OverflowSpacer-x"></div>
+            </div>
+            <button
+              data-more-button-inactive="true"
+              class="prc-ActionBar-MoreButton-x"
+            >
+              …
+            </button>
+          </div>
+        </div>
+        <!-- Saved replies sits outside the ActionBar entirely. -->
+        <button
+          data-component="IconButton"
+          type="button"
+          aria-labelledby="tip-reply"
+          class="prc-Button-IconButton-x"
+        >
+          <svg
+            data-component="Octicon"
+            aria-hidden="true"
+            class="octicon octicon-reply"
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            fill="currentColor"
+          >
+            <path d="M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2Z" />
+          </svg></button
+        ><span
+          class="prc-TooltipV2-Tooltip-x"
+          data-component="Tooltip"
+          data-direction="s"
+          aria-hidden="true"
+          id="tip-reply"
+          popover="auto"
+          >Saved replies</span
+        >
+      </div>
+    </div>
+    <div class="MarkdownInput-inputWrapper"><textarea id="ta"></textarea></div>
+  </div>
+</form>
+<div id="results">running…</div>
+
+<script src="harness.js"></script>
+<script>
+  const { BUTTONS, PATH, gmStub } = window.gfmTest;
+  let n = 0;
+  // React: a bare button followed by a sibling tooltip span, no wrapper.
+  const item = ([icon, label]) => {
+    const id = "tip" + ++n;
+    return `<button data-component="IconButton" type="button" aria-labelledby="${id}"
+      class="prc-Button-IconButton-x" tabindex="-1"><svg data-component="Octicon"
+      aria-hidden="true" class="octicon octicon-${icon}" viewBox="0 0 16 16" width="16"
+      height="16" fill="currentColor"><path d="${PATH}"/></svg></button><span
+      class="prc-TooltipV2-Tooltip-x" data-component="Tooltip" data-direction="s"
+      aria-hidden="true" id="${id}" popover="auto">${label}</span>`;
+  };
+  const group = (inner) =>
+    `<div class="prc-ActionBar-Group-x" data-component="ActionBar.Group"><div
+      data-component="ActionBar.VerticalDivider" aria-hidden="true"
+      class="prc-ActionBar-Divider-x"></div>${inner}</div>`;
+
+  document.getElementById("bar").insertAdjacentHTML(
+    "beforeend",
+    BUTTONS.slice(0, 6).map(item).join("") +
+      group(BUTTONS.slice(6, 9).map(item).join("")) +
+      group(BUTTONS.slice(9, 11).map(item).join("")) +
+      // index 11 is Saved replies, which React renders outside the ActionBar
+      BUTTONS.slice(12).map(item).join(""),
+  );
+  gmStub();
+</script>
+
+<script src="../gfm-tidy.user.js"></script>
+
+<script>
+  (async () => {
+    const t = window.gfmTest;
+    const bar = document.getElementById("bar");
+    const ta = document.getElementById("ta");
+
+    t.check(
+      "nine buttons injected",
+      document.querySelectorAll("button[data-gfm-tidy]").length,
+      9,
+    );
+    t.check(
+      "the hidden markdown-toolbar decoy was not used",
+      document
+        .querySelector("markdown-toolbar")
+        .hasAttribute("data-gfm-tidy-managed"),
+      false,
+    );
+    t.check(
+      "container marked as React",
+      bar.hasAttribute("data-gfm-tidy-react"),
+      true,
+    );
+    t.check(
+      "the toolbar ancestor is marked too",
+      bar.closest("[role=toolbar]").hasAttribute("data-gfm-tidy-react"),
+      true,
+    );
+    t.check(
+      "group wrappers flattened away",
+      document.querySelectorAll('[data-component="ActionBar.Group"]').length,
+      0,
+    );
+    t.check(
+      "Saved replies adopted from outside the ActionBar",
+      !!bar.querySelector(".octicon-reply"),
+      true,
+    );
+    t.check(
+      "its tooltip came with it",
+      !!bar.querySelector("#tip-reply"),
+      true,
+    );
+
+    t.check(
+      "order matches the shared expectation",
+      t.shown(bar),
+      t.EXPECTED_ORDER,
+    );
+
+    // React's tooltip is a sibling span, so there is nothing to clone.
+    const own = document.querySelector('[data-gfm-tidy="UNWRAP"]');
+    t.check(
+      "falls back to a title tooltip on React",
+      own.getAttribute("title"),
+      "Unwrap",
+    );
+
+    // The textarea is only reachable by findTextarea's ancestor walk here.
+    ta.value = "one\ntwo";
+    ta.focus();
+    ta.setSelectionRange(0, 0);
+    own.click();
+    t.check("unwrap works through the ancestor walk", ta.value, "one two");
+
+    // Nothing we do not model may be left in front of the toolbar.
+    t.check(
+      "first child is a real toolbar item",
+      t.nameOf(bar.firstElementChild) !== null,
+      true,
+    );
+
+    // React re-marking overflow must be undone, not fought with CSS.
+    bar
+      .querySelectorAll("button")
+      .forEach((b) => b.setAttribute("data-overflowing", ""));
+    bar.closest("[role=toolbar]").setAttribute("data-has-overflow", "true");
+    await t.settle();
+    t.check(
+      "overflow markers stripped",
+      bar.querySelectorAll("[data-overflowing]").length,
+      0,
+    );
+    t.check(
+      "and the list no longer claims overflow",
+      bar.closest("[role=toolbar]").getAttribute("data-has-overflow"),
+      "false",
+    );
+
+    t.check(
+      "no duplicates after a re-render",
+      document.querySelectorAll("button[data-gfm-tidy]").length,
+      9,
+    );
+    t.check("order stable after a re-render", t.shown(bar), t.EXPECTED_ORDER);
+    t.report();
+  })();
+</script>

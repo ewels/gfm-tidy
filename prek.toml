@@ -8,5 +8,6 @@ hooks = [{ id = "prettier" }]
 [[repos]]
 repo = "local"
 hooks = [
-    { id = "tests", name = "tests", entry = "node test.cjs", language = "system", files = "\\.(c?js)$", pass_filenames = false },
+    { id = "tests", name = "tests", entry = "node tests/test.cjs", language = "system", files = "\\.(c?js)$", pass_filenames = false },
+    { id = "fixtures", name = "fixtures", entry = "python3 tests/fixtures.py", language = "system", files = "\\.(c?js|html)$", pass_filenames = false },
 ]

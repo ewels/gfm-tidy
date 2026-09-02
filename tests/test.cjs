@@ -1,11 +1,11 @@
-// Run with: node test.cjs
+// Run with: node tests/test.cjs
 const assert = require("assert");
 const {
   unwrap,
   dedent,
   detailsWrap,
   alertWrap,
-} = require("./gfm-tidy.user.js");
+} = require("../gfm-tidy.user.js");
 
 const eq = (name, got, want) => {
   assert.strictEqual(
