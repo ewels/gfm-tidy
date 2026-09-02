@@ -1,130 +1,109 @@
 # gfm-tidy
 
-Adds buttons to the GitHub markdown toolbar, and lets you reorder or hide every
-button already on it.
+Extra buttons for the GitHub markdown toolbar, and control over which of
+GitHub's own buttons you keep. Works on issues, pull requests, review comments
+and discussions.
 
-| Button    | What it does                                                                                                                                                                                                                                                                 |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unwrap    | Joins hard-wrapped lines back into full-length paragraphs.                                                                                                                                                                                                                   |
-| Dedent    | Strips the longest leading-whitespace prefix common to every non-blank line. Refuses to guess when tabs and spaces are mixed.                                                                                                                                                |
-| Details   | Wraps the text in a `<details>` box with a placeholder `<summary>`, left selected so you can type straight over it.                                                                                                                                                          |
-| Alerts    | Wraps the text in a [GitHub alert](https://docs.github.com/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts), quoting every line. One button per kind: Note, Tip, Important, Warning, Caution. |
-| Configure | Opens the settings panel described below.                                                                                                                                                                                                                                    |
+The transforms exist because of how LLMs write. Paste output from a model, or
+let one comment on GitHub itself, and you get:
+
+- **Text hard-wrapped at 80 columns.** GitHub flavoured markdown renders a
+  single line break as a `<br>`, unlike most markdown, so every wrap shows up in
+  the rendered text.
+- **Commit hashes in backticks.** GitHub links a bare hash, but not one inside a
+  code span.
+- **Code indented to wherever it sat in the source.**
+
+This extension adds a button to fix those things. And more.
+
+## Buttons
+
+| Button        | What it does                                                                                                                                                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unwrap**    | Joins hard-wrapped lines into full-length paragraphs, and frees commit hashes from backticks.                                                                                                                                       |
+| **Dedent**    | Strips the leading whitespace common to every line. Refuses to guess on mixed tabs and spaces.                                                                                                                                      |
+| **Details**   | Wraps the text in a `<details>` box, with the `<summary>` placeholder selected so you can type over it.                                                                                                                             |
+| **Alerts**    | One button per [GitHub alert](https://docs.github.com/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts) kind: Note, Tip, Important, Warning, Caution. |
+| **Configure** | Opens the settings panel, where you can show/hide and reorder toolbar buttons (including native GitHub).                                                                                                                            |
+
+Unwrap, Dedent and Details act on the selection, or on the whole comment box
+when nothing is selected. Alerts insert an empty alert at the caret or wrap
+selected text. Undo works as you'd expect.
 
 https://github.com/user-attachments/assets/271c9fcc-7a62-4c1e-b409-9bc1460a02a5
-
-Unwrap is the main feature: GitHub renders single newlines as line breaks, so
-text wrapped at 80 columns reads badly in a comment. Unwrap leaves code fences,
-headings, tables, thematic breaks, explicit hard breaks and list structure
-alone, and unwraps wrapped list items and blockquotes correctly.
-
-It also frees commit hashes from backticks. GitHub links a bare hash but not one
-inside a code span, and models habitually write `` `6f3caa3a4` ``. Anything from
-7 to 40 lowercase hex digits alone in a code span loses its backticks; a longer
-hex string, uppercase hex, a command such as `` `git show 6f3caa3a4` ``, and
-anything inside a code fence are all left alone.
-
-Only Note and Warning are shown to begin with. Tip, Important and Caution ship
-switched off, and can be turned on in the settings panel.
-
-A fresh install also hides seven of GitHub's own buttons: Heading, Bold, Italic,
-Code, Mention, Reference and Attach files. The first four have quicker keyboard
-shortcuts, and the toolbar is crowded enough to wrap onto a second row
-otherwise. Every one of them is a click away in the panel.
-
-Unwrap, Dedent and Details work on the selection, or on the whole comment box
-when nothing is selected. The alert buttons differ: with nothing selected they
-insert an empty `> [!NOTE]` at the caret, with the cursor on its body line,
-rather than wrapping everything you have written. Details and the alerts always
-leave a blank line above and below themselves, which is what GitHub needs to
-render them as their own block.
-
-Edits go through the browser's own insert-text path, so undo still works. The
-added buttons sit at the end of the toolbar, after a separator, until you move
-them.
-
-Works on issues, pull requests, review comments and discussions.
 
 ## Install
 
 1. Install [Violentmonkey](https://violentmonkey.github.io/) or
    [Tampermonkey](https://www.tampermonkey.net/).
 2. In Chrome, open the extension's details page and turn on **Allow user
-   scripts**. Chrome requires this for every userscript manager under Manifest
-   V3, and nothing runs without it.
+   scripts**. Manifest V3 requires this for every userscript manager, and
+   nothing runs without it.
 3. Open
    [`gfm-tidy.user.js`](https://raw.githubusercontent.com/ewels/gfm-tidy/main/gfm-tidy.user.js)
-   and confirm the install prompt. Updates are picked up automatically.
+   and confirm the install prompt. Updates are automatic.
 
-## Customising the toolbar
+## Defaults
 
-Click the **Configure** button in the toolbar. If you switch that button off,
-the panel is still reachable from the Tampermonkey or Violentmonkey icon on any
-github.com tab, under **Configure toolbar buttons**. Every button in the toolbar
-is listed with its icon, its name and what it does, including the three this
-script adds and the separators between groups.
+Hidden on a fresh install, each one click away in the panel:
+
+- GitHub's Heading, Bold, Italic, Code, Mention, Reference and Attach files. The
+  first four have quicker keyboard shortcuts, and the toolbar wraps onto a
+  second row otherwise.
+- The Tip, Important and Caution alerts.
+
+These apply only to a layout you have never customised.
+
+## Settings panel
+
+Click **Configure**. If you switch that button off, the panel is still reachable
+from the Tampermonkey or Violentmonkey icon, under **Configure toolbar
+buttons**.
 
 - Drag a row by its handle to reorder the toolbar.
 - Switch a row off to hide that button.
-- **Add separator** appends a new divider to the bottom of the list; drag it
-  where you want it.
-- **Reset** restores the original order. That is GitHub's own order with these
-  added buttons in groups, not GitHub's toolbar without them.
+- **Add separator** adds a divider to the bottom of the list; drag it where you
+  want it.
+- **Reset** restores the default order: GitHub's own, with the added buttons in
+  groups.
 
-Changes apply immediately, with no reload, so an unsent comment draft is safe.
-
-Those install defaults apply only to a layout you have never customised, so
-changing GitHub's toolbar upstream never overwrites your own choices. The panel
-reads the live toolbar rather than a hardcoded list, so buttons GitHub adds or
-removes are picked up on their own, and a saved layout survives them changing
-the toolbar.
-
-The layout is stored by the userscript manager rather than by the page, so it
-survives script updates and clearing site data, and you can edit it by hand in
-Tampermonkey under the script's Storage tab.
+Changes apply immediately with no reload, so an unsent draft is safe. The layout
+is stored by the userscript manager rather than the page, so it survives script
+updates and clearing site data, and you can edit it by hand under the script's
+Storage tab. The panel reads the live toolbar, so buttons GitHub adds or removes
+are picked up on their own.
 
 ## Development
 
-The whole thing is one file with no build step and no dependencies. Edit
-`gfm-tidy.user.js` and reload a GitHub page.
+One file, no build step, no dependencies. Edit `gfm-tidy.user.js` and reload a
+GitHub page.
 
 ```sh
 node tests/test.cjs       # the text transforms
 python3 tests/fixtures.py # the toolbar, in headless Chrome
-prek run -a               # all three, the same hooks CI runs
+prek run -a               # all of it, the same hooks CI runs
 ```
 
 `tests/classic.html` and `tests/react.html` are trimmed copies of the two
-toolbars GitHub renders — the classic one on pull requests and discussions, the
-Primer React one on issues. Each asserts in the page and can simply be opened in
-a browser; `tests/fixtures.py` runs both in headless Chrome and fails on any
-failed check. Both assert the _same_ expected toolbar order, which is what keeps
-the two editors consistent.
+toolbars GitHub renders: the classic one on pull requests and discussions, the
+Primer React one on issues. Open either in a browser to watch the checks run.
+Both assert the same expected toolbar order, which is what keeps the two editors
+consistent.
 
-Bump `@version` in the header for any change you want installed copies to pick
-up: a userscript manager compares that field against `@updateURL` and updates
-only when the remote value is higher.
-
-CI runs `prek` on push and pull requests, so the same three hooks gate every
-change. The fixture runner needs Chrome, which GitHub's runners already have.
+Bump `@version` for anything you want installed copies to pick up: managers only
+update when the remote value is higher.
 
 ## Known limits
 
-- GitHub's toolbar normally moves buttons it thinks will not fit into a `...`
-  overflow menu. Since you are choosing what the toolbar holds, that is
-  overridden: every button you leave switched on stays visible, the `...` menu
-  is hidden, and the toolbar wraps onto a second row if a window is too narrow
-  for all of them.
-- Unwrap treats a line starting with `<` as an HTML block and leaves it alone,
-  which also catches a paragraph that happens to start with an autolink.
-- A code span holding 7 to 40 lowercase hex digits is assumed to be a commit
-  hash. Anything else of that shape, in a comment or an indented code block,
-  loses its backticks too.
-- Reordering uses HTML5 drag and drop, which needs a mouse. There is no
-  touch-friendly way to move a row.
-- Needs a manager with synchronous `GM_getValue`, which means Tampermonkey or
-  Violentmonkey. Greasemonkey's `GM.getValue` is promise-based and will not work
-  unchanged.
+- Reordering needs a mouse. HTML5 drag and drop has no touch equivalent.
+- Tampermonkey or Violentmonkey only. Greasemonkey's `GM.getValue` is
+  promise-based and will not work unchanged.
+- GitHub's `...` overflow menu is replaced by wrapping onto a second row, since
+  you are the one choosing what the toolbar holds.
+- Unwrap skips any line starting with `<`, which also catches a paragraph
+  beginning with an autolink.
+- A code span of 7 to 40 lowercase hex digits is treated as a commit hash
+  wherever it appears, including inside an indented code block.
 
 ## License
 
