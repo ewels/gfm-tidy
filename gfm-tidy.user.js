@@ -155,16 +155,20 @@
   const LAYOUT_KEY = "layout";
   const SEPARATOR = "|";
   const HOME = "https://github.com/ewels/gfm-tidy";
-  const ITEM = ".ActionBar-item";
-  const DIVIDER = ".ActionBar-divider";
-  const BUTTON_SELECTOR = "button[data-analytics-event], button[" + MARK + "]";
+  const ITEM = ".ActionBar-item"; // classic only; React has bare buttons
+  const DIVIDER =
+    '.ActionBar-divider, [data-component="ActionBar.VerticalDivider"]';
+  const GROUP = '[data-component="ActionBar.Group"]';
+  // Every button is a candidate; actionOf decides which ones we can name.
+  const BUTTON_SELECTOR = "button";
   const ICON_CSS = "flex:none;width:16px;height:16px;fill:currentColor";
   const MUTED = "var(--fgColor-muted,GrayText)";
 
-  // Bold is the stable landmark. GitHub's current toolbar labels its buttons
-  // with data-md-button and an aria-labelledby <tool-tip>; the aria-label form
-  // is a fallback in case a future editor drops the data attribute.
-  const ANCHOR = 'button[data-md-button="bold"], button[aria-label="Bold"]';
+  // Bold is the landmark, found by its icon: the classic editor renders
+  // "octicon octicon-bold Button-visual" and React's renders "octicon
+  // octicon-bold", so the icon class is the one thing they agree on. It is
+  // also a class lookup, far cheaper than matching an attribute list.
+  const ANCHOR_ICON = "octicon-bold";
 
   // GitHub renders each alert kind with its own octicon; these are those paths.
   const ALERTS = [
@@ -198,7 +202,8 @@
     },
   ];
 
-  // Short explanations for the settings panel. Titles and icons are read from
+  // Keyed by octicon name, which is what actionOf reports for GitHub's own
+  // buttons. Short explanations for the settings panel. Titles and icons are read from
   // the live toolbar, so only the prose lives here; an unrecognised button just
   // shows no description rather than breaking the panel.
   const DESCRIPTIONS = {
@@ -209,14 +214,14 @@
     QUOTE: "Quote the selected text.",
     CODE: "Format the selection as code.",
     LINK: "Turn the selection into a link.",
-    ORDERED_LIST: "Start a numbered list.",
-    UNORDERED_LIST: "Start a bulleted list.",
-    TASK_LIST: "Start a checkbox task list.",
-    ATTACH_FILES: "Attach a file or image.",
+    LIST_ORDERED: "Start a numbered list.",
+    LIST_UNORDERED: "Start a bulleted list.",
+    TASKLIST: "Start a checkbox task list.",
+    PAPERCLIP: "Attach a file or image.",
     MENTION: "Insert an @username mention.",
-    REFERENCE: "Link to another issue or pull request.",
-    SAVED_REPLIES: "Insert one of your saved replies.",
-    SLASH_COMMANDS: "Open the slash command menu.",
+    CROSS_REFERENCE: "Link to another issue or pull request.",
+    REPLY: "Insert one of your saved replies.",
+    DIFF_IGNORED: "Open the slash command menu.",
     UNWRAP: "Join hard-wrapped lines into full-length paragraphs.",
     DEDENT: "Strip the indentation shared by every line.",
     DETAILS: "Wrap the selection in a collapsible box.",
@@ -276,7 +281,13 @@
   // GitHub buttons hidden on a first install. Their keyboard shortcuts are
   // quicker than the buttons and the toolbar is crowded; one click in the
   // panel brings any of them back.
-  const HIDE_ON_INSTALL = ["HEADING", "BOLD", "ITALIC", "MENTION", "REFERENCE"];
+  const HIDE_ON_INSTALL = [
+    "HEADING",
+    "BOLD",
+    "ITALIC",
+    "MENTION",
+    "CROSS_REFERENCE",
+  ];
 
   // Buttons that ship switched off: they exist in the layout so the panel can
   // offer them, but the toolbar stays uncluttered until you turn one on. Only
@@ -289,13 +300,38 @@
 
   // Buttons that start a group, so the default layout puts a separator before
   // each of them rather than that separator being appended to the DOM.
-  const SEP_BEFORE = new Set(
-    BUTTONS.filter((spec) => spec.separatorBefore).map((spec) => spec.key),
-  );
+  // The default layout, written out rather than read from the DOM: the two
+  // editors ship GitHub's buttons in different orders (they disagree about
+  // numbered vs unordered lists, and React has no Copilot or attach button),
+  // and a toolbar should not depend on which page you happen to be on.
+  // Anything live but unlisted is appended, so a new GitHub button still shows.
+  const DEFAULT_ORDER = [
+    "COPILOT",
+    SEPARATOR,
+    "HEADING",
+    "BOLD",
+    "ITALIC",
+    "QUOTE",
+    "CODE",
+    "LINK",
+    SEPARATOR,
+    "LIST_ORDERED",
+    "LIST_UNORDERED",
+    "TASKLIST",
+    SEPARATOR,
+    "PAPERCLIP",
+    "MENTION",
+    "CROSS_REFERENCE",
+    "REPLY",
+    "DIFF_IGNORED",
+    ...BUTTONS.flatMap((spec) =>
+      spec.separatorBefore ? [SEPARATOR, spec.key] : [spec.key],
+    ),
+  ];
 
   // Attributes that would make a cloned button behave like the one it copies.
-  // Bold carries only the first few, but ANCHOR's fallback can match another
-  // editor's Bold button, and an inherited handler is expensive to debug.
+  // Bold carries only the first few, but we anchor on the Bold icon, which
+  // both editors draw, so the clone source varies by editor.
   const STRIP = [
     "data-md-button",
     "data-hotkey",
@@ -347,29 +383,41 @@
     style.id = "gfm-tidy-style";
     style.textContent =
       `[${MANAGED}]{flex-wrap:wrap}` +
-      `[${MANAGED}] ${ITEM}{visibility:visible!important}` +
-      `[${HIDDEN}]{display:none!important}` +
-      `[${MANAGED}] ~ .ActionBar-more-menu{display:none!important}`;
+      // React's toolbar row is a fixed height with overflow hidden, so a
+      // wrapped second row would be invisible. Scoped to React by its own
+      // divider element: relaxing the height on the classic toolbar instead
+      // left its <hr> dividers riding up over the border.
+      `[${MANAGED}]:has([data-component="ActionBar.VerticalDivider"]),` +
+      `[role=toolbar]:has([data-component="ActionBar.VerticalDivider"])` +
+      `{overflow:visible!important;height:auto!important;align-items:center}` +
+      // Both editors run an overflow manager that measures the toolbar and
+      // hides what it thinks will not fit. Adding buttons breaks that sum, so
+      // it hid most of GitHub's own: classic sets inline visibility, React
+      // marks items data-overflowing and shows a kebab menu instead. We curate
+      // the toolbar now, so neutralise both and let it wrap instead.
+      `[${MANAGED}] ${ITEM},[${MANAGED}] > button{visibility:visible!important}` +
+      `[${MANAGED}] > [data-overflowing]{position:static!important;` +
+      `visibility:visible!important;opacity:1!important;` +
+      `width:auto!important;height:auto!important;pointer-events:auto!important}` +
+      `[${MANAGED}] > button[data-overflowing]{display:inline-flex!important}` +
+      `[${MANAGED}] ~ .ActionBar-more-menu,[${MANAGED}] ~ button{display:none!important}` +
+      // the spacer React uses to push overflow off the end
+      `[${MANAGED}] > div:empty:not([data-component]){display:none!important}` +
+      // last, so our own hiding always beats the resets above
+      `[${HIDDEN}]{display:none!important}`;
     document.head.appendChild(style);
     styleEl = style;
   }
 
-  // Every toolbar on the page. Both lookups are tag-name lookups, which are
-  // cheap; matching ANCHOR against the whole document is not, because an
-  // attribute-selector list has no fast path and visits every element. The
-  // second tag is the fallback for an editor that drops <markdown-toolbar>.
+  // Every toolbar on the page, found through the one landmark both editors
+  // share. The collection is live and we move nodes about, so snapshot it.
   function* containers() {
-    for (const tag of ["markdown-toolbar", "action-bar"]) {
-      let found = false;
-      for (const host of document.getElementsByTagName(tag)) {
-        const anchor = host.querySelector(ANCHOR);
-        const slot = anchor && slotOf(anchor);
-        if (slot && slot.parentElement) {
-          found = true;
-          yield { slot, container: slot.parentElement };
-        }
+    for (const icon of [...document.getElementsByClassName(ANCHOR_ICON)]) {
+      const anchor = icon.closest("button");
+      const slot = anchor && slotOf(anchor);
+      if (slot && slot.parentElement) {
+        yield { slot, container: slot.parentElement };
       }
-      if (found) return;
     }
   }
 
@@ -397,16 +445,37 @@
     if (own) return own;
     let action = actions.get(btn);
     if (action === undefined) {
-      try {
-        action =
-          JSON.parse(btn.getAttribute("data-analytics-event") || "{}").action ||
-          "";
-      } catch (err) {
-        action = "";
-      }
+      // GitHub's buttons carry no identity of their own on either editor, but
+      // both draw a named octicon: octicon-list-ordered becomes LIST_ORDERED.
+      const icon = btn.querySelector("svg[class*=octicon-]");
+      const named =
+        icon && icon.getAttribute("class").match(/octicon-([\w-]+)/);
+      action = named ? named[1].toUpperCase().replace(/-/g, "_") : "";
       if (action) actions.set(btn, action); // never cache a failure
     }
     return action;
+  }
+
+  // Primer React marks what it thinks overflows and hides it with visibility,
+  // from a rule our stylesheet cannot reliably outrank. Removing the marker is
+  // decisive where winning a specificity fight is guesswork.
+  function clearOverflowFlags(container) {
+    for (const flagged of container.querySelectorAll("[data-overflowing]")) {
+      flagged.removeAttribute("data-overflowing");
+    }
+    const list = container.parentElement;
+    if (list && list.getAttribute("data-has-overflow") === "true") {
+      list.setAttribute("data-has-overflow", "false");
+    }
+  }
+
+  // React nests some buttons in group wrappers. Any reorder pulls them out
+  // anyway, so flatten once and let everything downstream see the single flat
+  // list the classic toolbar already gives us.
+  function flattenGroups(container) {
+    for (const group of container.querySelectorAll(GROUP)) {
+      group.replaceWith(...group.childNodes);
+    }
   }
 
   // One walk per container, so everything downstream is an O(1) lookup.
@@ -457,20 +526,28 @@
   // separator before each one whose spec starts a group. Walking backwards so
   // the splices do not shift the indices still to check.
   function captureDefault(container) {
-    const order = readOrder(container);
-    if (!container.querySelector(DIVIDER)) return order; // nothing to clone
-    for (let i = order.length - 1; i >= 0; i--) {
-      if (SEP_BEFORE.has(order[i].id)) {
-        order.splice(i, 0, { id: SEPARATOR, on: true });
-      }
+    // Keyed by id, so GitHub's own divider positions are dropped: DEFAULT_ORDER
+    // decides where the groups fall, identically on either editor.
+    const live = new Map(
+      readOrder(container)
+        .filter((entry) => entry.id !== SEPARATOR)
+        .map((entry) => [entry.id, entry]),
+    );
+    const order = [];
+    for (const id of DEFAULT_ORDER) {
+      if (id === SEPARATOR) order.push({ id: SEPARATOR, on: true });
+      else if (live.has(id)) order.push(live.get(id)) && live.delete(id);
     }
-    return pruneSeparators(order);
+    for (const entry of live.values()) order.push(entry); // unlisted, keep it
+    return order;
   }
 
   // Drop entries whose button has gone and append ones GitHub has added, so a
   // saved layout survives GitHub changing its toolbar.
   function reconcile(layout, buttons) {
-    const out = layout.filter((e) => e.id === SEPARATOR || buttons.has(e.id));
+    const out = layout
+      .filter((e) => e.id === SEPARATOR || buttons.has(e.id))
+      .map((e) => ({ ...e })); // copies: pruneSeparators mutates `on`
     for (const action of buttons.keys()) {
       if (!out.some((e) => e.id === action)) {
         out.push({ id: action, on: defaultOn(action) });
@@ -480,7 +557,13 @@
   }
 
   function layoutFor(container, buttons, stored) {
-    return reconcile(stored || defaultLayout || readOrder(container), buttons);
+    const layout = reconcile(
+      stored || defaultLayout || readOrder(container),
+      buttons,
+    );
+    // Every time, not just for defaults: hiding a button can orphan the
+    // divider beside it at any point.
+    return pruneSeparators(layout);
   }
 
   function applyLayout(container, stored) {
@@ -876,6 +959,8 @@
       if (!container.hasAttribute(MANAGED)) {
         container.setAttribute(MANAGED, "");
       }
+      flattenGroups(container);
+      clearOverflowFlags(container);
       // Only our own buttons answer this: a reused divider must not count, or
       // one failed buildItem would lose the buttons for the session.
       if (!container.querySelector("button[" + MARK + "]")) {
@@ -903,7 +988,15 @@
         queued = false;
         inject();
       });
-    }).observe(document.body, { childList: true, subtree: true });
+      // data-overflowing is watched because Primer sets it without touching
+      // childList; our own attributes are not in the filter, so we never wake
+      // ourselves up.
+    }).observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-overflowing"],
+    });
     inject();
   }
 

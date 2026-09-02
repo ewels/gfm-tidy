@@ -45,12 +45,35 @@ inside the loop's fence check so code blocks keep theirs.
 
 ### Reading GitHub's toolbar
 
-GitHub uses no `<md-bold>` elements and no `aria-label` on toolbar buttons.
-Buttons are `<button data-md-button="bold">` inside
-`<div class="ActionBar-item">` within `<action-bar>`, labelled by a sibling
-`<tool-tip>` through `aria-labelledby`. Consequences encoded in the script:
+**There are two editors, and both must work.** Pull requests and discussions use
+the classic one; issues use a Primer React rewrite, and GitHub is migrating the
+rest. They share almost nothing:
 
-- `ANCHOR` finds the Bold button; everything else is located relative to it.
+|           | classic (PRs, discussions)       | React (issues)                                                            |
+| --------- | -------------------------------- | ------------------------------------------------------------------------- |
+| Bold      | `button[data-md-button="bold"]`  | only `svg.octicon-bold`                                                   |
+| Identity  | `data-analytics-event`           | nothing                                                                   |
+| Wrapper   | `.ActionBar-item`                | bare `<button>`                                                           |
+| Tooltip   | `<tool-tip>` sibling             | `<span class="prc-TooltipV2-…">` sibling                                  |
+| Divider   | `<hr class="ActionBar-divider">` | `<div data-component="ActionBar.VerticalDivider">`, inside Group wrappers |
+| Container | `<action-bar>` element           | `<div data-component="ActionBar">`                                        |
+
+A React issue page also carries a **hidden decoy**: a `<markdown-toolbar>` with
+`display:none` full of _empty_ `<md-bold>` elements, there only for the keyboard
+shortcuts. Anchoring on that element finds no buttons. Do not use it.
+
+Consequences encoded in the script:
+
+- `ANCHOR_ICON` is `octicon-bold`, found with `getElementsByClassName`. The icon
+  class is the only landmark both editors share, and a class lookup is far
+  cheaper than matching an attribute list against the whole document on every
+  mutation. Everything else is located relative to that button.
+- `flattenGroups` lifts React's `ActionBar.Group` children into the container on
+  first sight. Any reorder would pull them out anyway, so flattening once lets
+  the layout code see the one flat list the classic toolbar already gives it.
+- `slotOf` returns `.ActionBar-item` on the classic editor and the bare button
+  on React, which is why the `|| btn` fallback is load-bearing rather than
+  defensive.
 - A `BUTTONS` spec either carries `fn`, a pure text transform run through
   `apply`, or `onClick`, which handles the click itself — that is how the
   Configure button opens the panel. A spec with `off: true` ships switched off:
@@ -66,14 +89,21 @@ Buttons are `<button data-md-button="bold">` inside
   styling, then removes every attribute in `STRIP`. **Leaving `data-md-button`
   on a clone makes our button also apply bold**, and leaving `aria-labelledby`
   makes screen readers announce it as "Bold".
-- Button identity is the action name in `data-analytics-event`, memoised per
-  node in a `WeakMap`. `actionOf` reads our own `MARK` attribute first, so our
-  buttons and GitHub's share one vocabulary (`UNWRAP`, `MENTION`, …). That is
-  also the config's vocabulary.
+- **Button identity is the octicon name**, memoised per node in a `WeakMap`:
+  `octicon-list-ordered` becomes `LIST_ORDERED`. Both editors draw named
+  octicons, so one vocabulary serves both and a single stored layout applies to
+  either — which `data-analytics-event` could not do, since React ships none.
+  `actionOf` reads our own `MARK` attribute first, so our buttons share that
+  vocabulary (`UNWRAP`, `ALERT_NOTE`, …). It is also the config's vocabulary,
+  and `DESCRIPTIONS` and `HIDE_ON_INSTALL` are keyed by it — hence
+  opaque-looking keys like `DIFF_IGNORED` for slash commands and `REPLY` for
+  saved replies.
 - Labels and icons in the settings panel are read from the live toolbar
   (`labelOf`, cloned `<svg>`), never hardcoded, so they track GitHub's changes.
 - Our buttons get a rewired clone of GitHub's `<tool-tip>` rather than a `title`
-  attribute, so hovering matches every other button.
+  attribute, so hovering matches every other button. React's tooltip is a
+  _sibling_ span rather than a child, so there is nothing to clone there and
+  those buttons fall back to `aria-label` + `title`.
 
 ### Layout model
 
