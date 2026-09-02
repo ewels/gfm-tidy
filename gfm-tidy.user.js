@@ -469,6 +469,24 @@
     }
   }
 
+  // React leaves Saved replies outside the ActionBar altogether, as a sibling
+  // of the whole thing, so the toolbar would differ between issues and pull
+  // requests. Move any such button in, and its tooltip with it, so it becomes
+  // an ordinary layout entry. Idempotent: once adopted it is inside the bar.
+  function adoptStrays(container) {
+    const bar = container.closest('[data-component="ActionBar"]');
+    const toolbar = bar && bar.parentElement;
+    if (!toolbar) return; // classic keeps everything in one place already
+    for (const btn of [...toolbar.querySelectorAll("button")]) {
+      if (bar.contains(btn) || !actionOf(btn)) continue;
+      const tip = btn.nextElementSibling;
+      container.appendChild(btn);
+      if (tip && tip.matches('[data-component="Tooltip"]')) {
+        container.appendChild(tip);
+      }
+    }
+  }
+
   // React nests some buttons in group wrappers. Any reorder pulls them out
   // anyway, so flatten once and let everything downstream see the single flat
   // list the classic toolbar already gives us.
@@ -959,6 +977,7 @@
       if (!container.hasAttribute(MANAGED)) {
         container.setAttribute(MANAGED, "");
       }
+      adoptStrays(container);
       flattenGroups(container);
       clearOverflowFlags(container);
       // Only our own buttons answer this: a reused divider must not count, or

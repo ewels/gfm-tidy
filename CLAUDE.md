@@ -68,12 +68,24 @@ Consequences encoded in the script:
   class is the only landmark both editors share, and a class lookup is far
   cheaper than matching an attribute list against the whole document on every
   mutation. Everything else is located relative to that button.
+- `adoptStrays` moves buttons React leaves _outside_ the ActionBar — Saved
+  replies is a sibling of the whole thing — into the container, with its
+  tooltip, so the toolbar is the same on issues as on pull requests. It is a
+  no-op on classic, which keeps everything in one place.
 - `flattenGroups` lifts React's `ActionBar.Group` children into the container on
   first sight. Any reorder would pull them out anyway, so flattening once lets
   the layout code see the one flat list the classic toolbar already gives it.
 - `slotOf` returns `.ActionBar-item` on the classic editor and the bare button
   on React, which is why the `|| btn` fallback is load-bearing rather than
   defensive.
+- The stylesheet's `height`/`overflow` relaxation is scoped to React by its own
+  divider element. React's toolbar row is a fixed height with `overflow:hidden`,
+  so a wrapped second row would be invisible — but applying the same relaxation
+  to the classic toolbar leaves its `<hr>` dividers riding up over the border.
+- `DEFAULT_ORDER` is written out rather than read from the DOM, and GitHub's own
+  divider positions are discarded. The two editors ship different orders (they
+  disagree about numbered vs unordered lists) and the toolbar must not depend on
+  which page you are on.
 - A `BUTTONS` spec either carries `fn`, a pure text transform run through
   `apply`, or `onClick`, which handles the click itself — that is how the
   Configure button opens the panel. A spec with `off: true` ships switched off:
