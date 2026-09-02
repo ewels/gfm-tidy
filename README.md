@@ -25,6 +25,10 @@ anything inside a code fence are all left alone.
 Only Note and Warning are shown to begin with. Tip, Important and Caution ship
 switched off, and can be turned on in the settings panel.
 
+A fresh install also hides GitHub's own Heading, Bold, Italic, Mention and
+Reference buttons — the first three have quicker keyboard shortcuts, and the
+toolbar is crowded. Every one of them is a click away in the panel.
+
 Each formatting button works on the selection, or on the whole comment box when
 nothing is selected; with an empty box an alert button gives you the empty
 `> [!NOTE]` skeleton with the caret on its body line. Edits go through the
@@ -61,9 +65,11 @@ script adds and the separators between groups.
 
 Changes apply immediately, with no reload, so an unsent comment draft is safe.
 
-Nothing is hidden or moved by default. The panel reads the live toolbar rather
-than a hardcoded list, so buttons GitHub adds or removes are picked up on their
-own, and a saved layout survives them changing the toolbar.
+Those install defaults apply only to a layout you have never customised, so
+changing GitHub's toolbar upstream never overwrites your own choices. The panel
+reads the live toolbar rather than a hardcoded list, so buttons GitHub adds or
+removes are picked up on their own, and a saved layout survives them changing
+the toolbar.
 
 The layout is stored by the userscript manager rather than by the page, so it
 survives script updates and clearing site data, and you can edit it by hand in

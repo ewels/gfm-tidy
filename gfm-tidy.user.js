@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GFM Tidy
 // @namespace    https://github.com/ewels/gfm-tidy
-// @version      1.3.0
+// @version      1.0.0
 // @description  Unwrap, dedent and <details> buttons for the GitHub markdown toolbar, and reorder or hide any button on it
 // @author       Phil Ewels
 // @license      MIT
@@ -221,7 +221,7 @@
     DEDENT: "Strip the indentation shared by every line.",
     DETAILS: "Wrap the selection in a collapsible box.",
     CONFIG: "Open this settings panel.",
-    [SEPARATOR]: "A divider between groups of buttons.",
+    [SEPARATOR]: "",
     ...Object.fromEntries(
       ALERTS.map((alert) => [
         "ALERT_" + alert.kind,
@@ -272,11 +272,18 @@
   ];
   const OURS = new Set(BUTTONS.map((spec) => spec.key));
 
+  // GitHub buttons hidden on a first install. Their keyboard shortcuts are
+  // quicker than the buttons and the toolbar is crowded; one click in the
+  // panel brings any of them back.
+  const HIDE_ON_INSTALL = ["HEADING", "BOLD", "ITALIC", "MENTION", "REFERENCE"];
+
   // Buttons that ship switched off: they exist in the layout so the panel can
-  // offer them, but the toolbar stays uncluttered until you turn one on.
-  const DEFAULT_OFF = new Set(
-    BUTTONS.filter((spec) => spec.off).map((spec) => spec.key),
-  );
+  // offer them, but the toolbar stays uncluttered until you turn one on. Only
+  // consulted for entries new to a layout, so an existing setup is untouched.
+  const DEFAULT_OFF = new Set([
+    ...BUTTONS.filter((spec) => spec.off).map((spec) => spec.key),
+    ...HIDE_ON_INSTALL,
+  ]);
   const defaultOn = (action) => !DEFAULT_OFF.has(action);
 
   // Buttons that start a group, so the default layout puts a separator before
@@ -428,6 +435,23 @@
     return order;
   }
 
+  // A separator only earns its place with a visible entry on either side of it,
+  // so no divider is left stranded at an end of the toolbar or doubled up next
+  // to another. Hidden buttons between it and the next visible one are fine.
+  function pruneSeparators(order) {
+    let before = false;
+    order.forEach((entry, i) => {
+      if (entry.id !== SEPARATOR) {
+        if (entry.on) before = true;
+        return;
+      }
+      const after = order.slice(i + 1).find((e) => e.id !== SEPARATOR && e.on);
+      entry.on = before && !!after;
+      if (entry.on) before = false; // the next one needs its own content
+    });
+    return order;
+  }
+
   // The default is GitHub's own order with our buttons appended, and a
   // separator before each one whose spec starts a group. Walking backwards so
   // the splices do not shift the indices still to check.
@@ -439,7 +463,7 @@
         order.splice(i, 0, { id: SEPARATOR, on: true });
       }
     }
-    return order;
+    return pruneSeparators(order);
   }
 
   // Drop entries whose button has gone and append ones GitHub has added, so a
@@ -554,7 +578,9 @@
       "userscript manager's icon in the browser toolbar, under " +
       '"Configure toolbar buttons".';
     fallback.style.cssText =
-      "margin:0 0 8px;flex:none;font-size:12px;color:" + MUTED;
+      "margin:0;padding:8px 0 0;font-size:12px;color:" +
+      MUTED +
+      ";border-top:1px solid var(--borderColor-muted,#d8dee4)";
 
     const list = document.createElement("div");
     // padding-right keeps the checkboxes clear of the scrollbar. Overlay
@@ -566,10 +592,12 @@
 
     const commit = () =>
       saveLayout(
-        [...list.children].map((row) => ({
-          id: row.dataset.id,
-          on: row.querySelector("input").checked,
-        })),
+        [...list.children]
+          .filter((row) => row.dataset.id)
+          .map((row) => ({
+            id: row.dataset.id,
+            on: row.querySelector("input").checked,
+          })),
       );
 
     function buildRow(entry) {
@@ -580,9 +608,7 @@
       row.dataset.id = entry.id;
       row.style.cssText =
         "display:flex;align-items:center;gap:10px;padding:8px 0;" +
-        "border-top:1px solid var(--borderColor-muted,#d8dee4)" +
-        // separators are structure rather than features, so let them recede
-        (sep ? ";opacity:0.65" : "");
+        "border-top:1px solid var(--borderColor-muted,#d8dee4)";
 
       const handle = svgIcon(GRABBER);
       handle.style.cursor = "grab";
@@ -616,26 +642,21 @@
         "flex:1;display:flex;align-items:center;gap:10px;cursor:pointer";
 
       const source = btn && btn.querySelector("svg");
+      let glyph;
       if (source) {
-        const copy = source.cloneNode(true);
-        copy.removeAttribute("class"); // drop Primer's button-specific sizing
-        copy.style.cssText = ICON_CSS;
-        label.appendChild(copy);
+        glyph = source.cloneNode(true);
+        glyph.removeAttribute("class"); // drop Primer's button-specific sizing
+        glyph.style.cssText = ICON_CSS;
       } else {
-        label.appendChild(svgIcon(SEP_ICON));
+        glyph = svgIcon(SEP_ICON);
       }
+      label.appendChild(glyph);
 
       const text = document.createElement("span");
       text.style.cssText = "flex:1";
       const title = document.createElement("strong");
       title.textContent = sep ? "Separator" : labelOf(btn);
       text.appendChild(title);
-      if (btn && OURS.has(entry.id)) {
-        const own = document.createElement("span");
-        own.textContent = " (gfm-tidy)";
-        own.style.cssText = "font-weight:400;font-size:11px;color:" + MUTED;
-        title.appendChild(own);
-      }
       if (DESCRIPTIONS[entry.id]) {
         const blurb = document.createElement("span");
         blurb.textContent = DESCRIPTIONS[entry.id];
@@ -643,13 +664,37 @@
         text.appendChild(blurb);
       }
 
+      // Primer's own pill, the same one GitHub marks "Beta" and "Preview"
+      // with, so it follows the page theme. It gets its own column beside the
+      // checkbox rather than crowding the name.
+      let pill = null;
+      if (btn && OURS.has(entry.id)) {
+        pill = document.createElement("span");
+        pill.className = "Label Label--secondary";
+        pill.textContent = "gfm-tidy";
+        pill.style.flex = "none";
+      }
+
       const toggle = document.createElement("input");
       toggle.type = "checkbox";
       toggle.checked = entry.on;
       toggle.style.cssText = "flex:none;width:16px;height:16px";
-      toggle.addEventListener("change", commit);
+      // Dim what the row describes, not its controls, so a switched-off button
+      // reads as off without the handle or checkbox looking disabled.
+      const dim = () => {
+        const faded = toggle.checked ? "" : "0.5";
+        glyph.style.opacity = faded;
+        text.style.opacity = faded;
+      };
+      dim();
+      toggle.addEventListener("change", () => {
+        dim();
+        commit();
+      });
 
-      label.append(text, toggle);
+      label.append(text);
+      if (pill) label.append(pill);
+      label.append(toggle);
       row.append(handle, label);
       return row;
     }
@@ -657,6 +702,7 @@
     const render = () =>
       list.replaceChildren(
         ...layoutFor(container, buttons, readStored()).map(buildRow),
+        fallback,
       );
     render();
 
@@ -667,7 +713,7 @@
     // Nothing to clone from means the entry would store but never render.
     addSeparator.disabled = !container.querySelector(DIVIDER);
     addSeparator.addEventListener("click", () => {
-      list.appendChild(buildRow({ id: SEPARATOR, on: true }));
+      list.insertBefore(buildRow({ id: SEPARATOR, on: true }), fallback);
       commit();
     });
 
@@ -693,7 +739,7 @@
     footer.style.cssText = "display:flex;gap:8px;flex:none;margin-top:16px";
     footer.append(addSeparator, reset, done);
 
-    dialog.append(heading, hint, fallback, list, footer);
+    dialog.append(heading, hint, list, footer);
     // A native <dialog> ignores backdrop clicks, and the click lands on the
     // dialog itself, so compare against its box rather than the target.
     dialog.addEventListener("click", (event) => {

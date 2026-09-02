@@ -56,6 +56,12 @@ Buttons are `<button data-md-button="bold">` inside
   Configure button opens the panel. A spec with `off: true` ships switched off:
   `defaultOn` is consulted by both `readOrder` and `reconcile`, so a newly added
   default-off button stays off for people who already have a saved layout.
+  `HIDE_ON_INSTALL` does the same for GitHub's own buttons, and
+  `pruneSeparators` then drops any divider with no visible entry on one side or
+  the other, so none is stranded at an end of the toolbar or doubled up. It
+  looks past hidden buttons to the next _visible_ entry: skipping that is what
+  made the divider after Copilot vanish once Heading, Bold and Italic were
+  hidden by default.
 - `buildItem` clones a whole `.ActionBar-item` to inherit GitHub's markup and
   styling, then removes every attribute in `STRIP`. **Leaving `data-md-button`
   on a clone makes our button also apply bold**, and leaving `aria-labelledby`
