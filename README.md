@@ -30,11 +30,16 @@ Code, Mention, Reference and Attach files. The first four have quicker keyboard
 shortcuts, and the toolbar is crowded enough to wrap onto a second row
 otherwise. Every one of them is a click away in the panel.
 
-Each formatting button works on the selection, or on the whole comment box when
-nothing is selected; with an empty box an alert button gives you the empty
-`> [!NOTE]` skeleton with the caret on its body line. Edits go through the
-browser's own insert-text path, so undo still works. The added buttons sit at
-the end of the toolbar, after a separator, until you move them.
+Unwrap, Dedent and Details work on the selection, or on the whole comment box
+when nothing is selected. The alert buttons differ: with nothing selected they
+insert an empty `> [!NOTE]` at the caret, with the cursor on its body line,
+rather than wrapping everything you have written. Details and the alerts always
+leave a blank line above and below themselves, which is what GitHub needs to
+render them as their own block.
+
+Edits go through the browser's own insert-text path, so undo still works. The
+added buttons sit at the end of the toolbar, after a separator, until you move
+them.
 
 Works on issues, pull requests, review comments and discussions.
 

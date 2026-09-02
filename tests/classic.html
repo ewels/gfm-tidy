@@ -82,6 +82,7 @@
     BUTTONS.slice(6, 9).map(item).join("") +
     rule +
     BUTTONS.slice(9).map(item).join("");
+  customElements.define("tool-tip", class extends HTMLElement {});
   gmStub();
 </script>
 
@@ -128,6 +129,11 @@
     );
     const tip = document.getElementById(
       ours("UNWRAP").getAttribute("aria-labelledby"),
+    );
+    t.check(
+      "tooltip is a popover, or showPopover() throws",
+      tip && tip.getAttribute("popover"),
+      "manual",
     );
     t.check(
       "tooltip rewired to our own text",
@@ -179,6 +185,21 @@
       run("ALERT_NOTE", ""),
       "> [!NOTE]\n> \n",
     );
+    // An alert with only a caret inserts an empty one; it must not swallow
+    // everything else in the box.
+    t.check(
+      "alert at the caret leaves the rest alone",
+      run("ALERT_WARNING", "existing text", 0, 0),
+      "> [!WARNING]\n> \n\nexisting text",
+    );
+    // Block constructs need a blank line above, or GitHub folds them into the
+    // paragraph they land against.
+    t.check(
+      "details gets a blank line above it",
+      run("DETAILS", "para\nmore", 5, 9),
+      "para\n\n<details>\n<summary>Details</summary>\n\nmore\n\n</details>\n",
+    );
+
     run("DETAILS", "body", 0, 4);
     t.check(
       "details leaves the summary selected",

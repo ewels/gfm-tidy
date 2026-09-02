@@ -116,10 +116,23 @@ Consequences encoded in the script:
   saved replies.
 - Labels and icons in the settings panel are read from the live toolbar
   (`labelOf`, cloned `<svg>`), never hardcoded, so they track GitHub's changes.
-- Our buttons get a rewired clone of GitHub's `<tool-tip>` rather than a `title`
-  attribute, so hovering matches every other button. React's tooltip is a
-  _sibling_ span rather than a child, so there is nothing to clone there and
-  those buttons fall back to `aria-label` + `title`.
+- Our buttons get a **freshly created** `<tool-tip>`, never a cloned one, and
+  never a `title` attribute. Three things this got wrong before, each of which
+  cost a debugging round:
+  - **Never clone it.** `cloneNode` constructs the element while it still
+    carries GitHub's `for`, so it binds to _their_ button and silently never
+    fires against ours. Nothing in the DOM shows the difference — the clone and
+    a working tooltip are attribute-for-attribute identical.
+  - **Set `popover="manual"` on it.** GitHub renders that server-side and the
+    element assumes it: without it, the element's own `showPopover()` throws
+    `NotSupportedError` on hover. Set `role`, `aria-hidden` and
+    `sr-only position-absolute` too, or the label sits visible in the toolbar.
+  - **Place it beside the button, not inside it.** On React the item _is_ the
+    button, so `buildItem` returns `{ item, tip }` and the caller appends the
+    tooltip as a sibling.
+- The element can be registered lazily, so `buildItem` keeps a `title` until
+  `customElements.whenDefined("tool-tip")` resolves. An unregistered
+  `<tool-tip>` renders nothing at all.
 
 ### Layout model
 

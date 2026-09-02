@@ -132,6 +132,9 @@
       // index 11 is Saved replies, which React renders outside the ActionBar
       BUTTONS.slice(12).map(item).join(""),
   );
+  // GitHub registers this custom element globally, including on React pages,
+  // even though the React toolbar draws its own tooltips as spans.
+  customElements.define("tool-tip", class extends HTMLElement {});
   gmStub();
 </script>
 
@@ -187,12 +190,37 @@
       t.EXPECTED_ORDER,
     );
 
-    // React's tooltip is a sibling span, so there is nothing to clone.
+    // React's tooltip is a React-owned span, so there is nothing to clone —
+    // but the <tool-tip> element is registered, so one gets made instead.
     const own = document.querySelector('[data-gfm-tidy="UNWRAP"]');
+    const madeTip = document.getElementById(
+      own.getAttribute("aria-labelledby"),
+    );
     t.check(
-      "falls back to a title tooltip on React",
-      own.getAttribute("title"),
-      "Unwrap",
+      "a tool-tip was made for it",
+      madeTip && madeTip.tagName,
+      "TOOL-TIP",
+    );
+    t.check("with our label", madeTip && madeTip.textContent, "Unwrap");
+    t.check(
+      "and a popover attribute, or showPopover() throws",
+      madeTip && madeTip.getAttribute("popover"),
+      "manual",
+    );
+    t.check(
+      "pointing back at our button",
+      madeTip && madeTip.getAttribute("for"),
+      own.id,
+    );
+    t.check(
+      "and no browser title bubble as well",
+      own.hasAttribute("title"),
+      false,
+    );
+    t.check(
+      "it lives beside the button, not inside it",
+      own.contains(madeTip),
+      false,
     );
 
     // The textarea is only reachable by findTextarea's ancestor walk here.

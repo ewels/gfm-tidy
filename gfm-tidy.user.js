@@ -263,6 +263,7 @@
       key: "DETAILS",
       label: "Details",
       icon: "M2 4l4 3-4 3zM8 4h6v1.5H8zM8 9.5h6V11H8z",
+      block: true,
       fn: detailsWrap,
     },
     ...ALERTS.map((alert, i) => ({
@@ -271,6 +272,8 @@
       label: alert.label,
       icon: alert.icon,
       off: alert.off,
+      insert: true, // no selection means an empty alert, not the whole box
+      block: true,
       fn: alertWrap(alert.kind),
     })),
     {
@@ -856,29 +859,43 @@
     }
   }
 
-  function apply(ta, fn) {
+  function apply(ta, spec) {
     let start = ta.selectionStart;
     let end = ta.selectionEnd;
-    if (start === end) {
+    // An alert with nothing selected inserts an empty one at the caret. The
+    // rest fall back to the whole box, which is what makes Unwrap useful.
+    if (start === end && !spec.insert) {
       start = 0;
       end = ta.value.length;
     }
     const source = ta.value.slice(start, end);
-    const result = fn(source);
+    const result = spec.fn(source);
     const out = typeof result === "string" ? { text: result } : result;
     if (out.text === source) return;
 
+    // A block construct needs a blank line either side of it, or GitHub folds
+    // it into the paragraph it lands against.
+    let lead = "";
+    let tail = "";
+    if (spec.block) {
+      const before = ta.value.slice(0, start);
+      const after = ta.value.slice(end);
+      if (before && !before.endsWith("\n\n")) {
+        lead = before.endsWith("\n") ? "\n" : "\n\n";
+      }
+      if (after && !after.startsWith("\n")) tail = "\n";
+    }
+    const text = lead + out.text + tail;
+
     ta.setSelectionRange(start, end);
-    replaceSelection(ta, out.text);
+    replaceSelection(ta, text);
 
     // The replacement began at start, so offsets are relative to it.
+    const base = start + lead.length;
     if (out.selectionStart !== undefined) {
-      ta.setSelectionRange(
-        start + out.selectionStart,
-        start + out.selectionEnd,
-      );
+      ta.setSelectionRange(base + out.selectionStart, base + out.selectionEnd);
     } else {
-      ta.setSelectionRange(start, start + out.text.length);
+      ta.setSelectionRange(start, start + text.length);
     }
   }
 
@@ -891,11 +908,13 @@
     const btn = buttonIn(item);
     if (!btn) return null;
 
-    // Rewire GitHub's <tool-tip> rather than using a title attribute, so
-    // hovering gives their styled bubble below the button like every other.
-    const tips = item.querySelectorAll("tool-tip");
-    const tip = tips[0];
-    for (let i = 1; i < tips.length; i++) tips[i].remove();
+    // Always make a fresh <tool-tip> rather than rewiring a cloned one. A
+    // clone is constructed while it still carries GitHub's `for`, so it binds
+    // itself to their button before we can retarget it, and then never fires.
+    // A new one binds to us. React draws its own tooltips as spans we cannot
+    // drive, so it needs the same treatment.
+    for (const stale of item.querySelectorAll("tool-tip")) stale.remove();
+    const tip = document.createElement("tool-tip");
 
     // Keep <action-bar>'s overflow bookkeeping away from our items.
     item.removeAttribute("data-targets");
@@ -908,25 +927,42 @@
     btn.setAttribute("tabindex", "0");
     btn.replaceChildren(svgIcon(spec.icon, "octicon Button-visual"));
 
-    if (tip) {
-      tip.id = "gfm-tidy-tooltip-" + n;
-      tip.setAttribute("for", btn.id);
-      tip.removeAttribute("style"); // stale position from the button we copied
-      tip.setAttribute("data-direction", "s"); // below the button, like the rest
-      tip.textContent = spec.label;
-      btn.setAttribute("aria-labelledby", tip.id);
-    } else {
-      btn.setAttribute("aria-label", spec.label);
+    tip.id = "gfm-tidy-tooltip-" + n;
+    tip.setAttribute("for", btn.id);
+    tip.setAttribute("data-direction", "s"); // below the button, like the rest
+    tip.setAttribute("data-type", "label");
+    // GitHub renders these server-side and the element assumes them. Without
+    // popover its own showPopover() throws, and without the classes the label
+    // sits visible in the toolbar until it is shown.
+    tip.setAttribute("popover", "manual");
+    tip.setAttribute("role", "tooltip");
+    tip.setAttribute("aria-hidden", "true");
+    tip.className = "sr-only position-absolute";
+    tip.textContent = spec.label;
+    btn.setAttribute("aria-label", spec.label);
+    btn.setAttribute("aria-labelledby", tip.id);
+
+    // On React the item is the bare button, so the tooltip goes beside it
+    // rather than inside it, and the caller places it.
+    const loose = item === btn ? tip : null;
+    if (!loose) item.appendChild(tip);
+
+    // GitHub can register the element lazily, and an unregistered <tool-tip>
+    // shows nothing, so keep the browser's own bubble until it upgrades.
+    if (!customElements.get("tool-tip")) {
       btn.setAttribute("title", spec.label);
+      customElements
+        .whenDefined("tool-tip")
+        .then(() => btn.removeAttribute("title"));
     }
 
     btn.addEventListener("click", (event) => {
       event.preventDefault();
       if (spec.onClick) return spec.onClick();
       const ta = findTextarea(btn);
-      if (ta) apply(ta, spec.fn);
+      if (ta) apply(ta, spec);
     });
-    return item;
+    return { item, tip: loose };
   }
 
   function inject() {
@@ -942,8 +978,11 @@
       // one failed buildItem would lose the buttons for the session.
       if (!container.querySelector("button[" + MARK + "]")) {
         for (const spec of BUTTONS) {
-          const item = buildItem(slot, spec);
-          if (item) container.appendChild(item);
+          const built = buildItem(slot, spec);
+          if (!built) continue;
+          container.appendChild(built.item);
+          // A tooltip we made rather than cloned is a sibling, as GitHub's are.
+          if (built.tip) container.appendChild(built.tip);
         }
       }
       applyLayout(container, stored);
