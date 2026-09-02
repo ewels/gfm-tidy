@@ -38,7 +38,8 @@ Two layers inside one IIFE, split at the `// dom layer` comment:
 the only tested code. `unwrap` classifies each line via the regexes at the top
 and joins it to the previous one only when both `startsBlock` and `endsBlock`
 allow it — that pair is what protects code fences, tables, headings, hard breaks
-and list structure.
+and list structure. It also frees backticked commit hashes (`HASH_SPAN`), done
+inside the loop's fence check so code blocks keep theirs.
 
 **DOM layer** injects the buttons and owns the toolbar's layout.
 
@@ -50,6 +51,11 @@ Buttons are `<button data-md-button="bold">` inside
 `<tool-tip>` through `aria-labelledby`. Consequences encoded in the script:
 
 - `ANCHOR` finds the Bold button; everything else is located relative to it.
+- A `BUTTONS` spec either carries `fn`, a pure text transform run through
+  `apply`, or `onClick`, which handles the click itself — that is how the
+  Configure button opens the panel. A spec with `off: true` ships switched off:
+  `defaultOn` is consulted by both `readOrder` and `reconcile`, so a newly added
+  default-off button stays off for people who already have a saved layout.
 - `buildItem` clones a whole `.ActionBar-item` to inherit GitHub's markup and
   styling, then removes every attribute in `STRIP`. **Leaving `data-md-button`
   on a clone makes our button also apply bold**, and leaving `aria-labelledby`
