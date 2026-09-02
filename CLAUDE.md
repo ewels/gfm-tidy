@@ -1,12 +1,14 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with
+code in this repository.
 
 ## What this is
 
-A single-file userscript (`gfm-tidy.user.js`) that adds three buttons to GitHub's
-markdown comment toolbar (unwrap, dedent, wrap in `<details>`) and lets the user
-reorder or hide every button on that toolbar. No build step, no dependencies.
+A single-file userscript (`gfm-tidy.user.js`) that adds three buttons to
+GitHub's markdown comment toolbar (unwrap, dedent, wrap in `<details>`) and lets
+the user reorder or hide every button on that toolbar. No build step, no
+dependencies.
 
 Note the directory is still named `gfm-fixup` while the project is `gfm-tidy`.
 
@@ -22,8 +24,8 @@ that stops at the first failure, so there is no way to select one test — to
 exercise one function, `require("./gfm-tidy.user.js")` and call it directly.
 
 `node` can require the userscript because it ends with a `module.exports` of the
-three transforms, and its DOM setup is behind a `typeof document !== "undefined"`
-guard. Keep both if you move code around.
+three transforms, and its DOM setup is behind a
+`typeof document !== "undefined"` guard. Keep both if you move code around.
 
 Bump `@version` in the header for any change, or installed copies never update:
 userscript managers compare that field against `@updateURL`.
@@ -43,9 +45,9 @@ and list structure.
 ### Reading GitHub's toolbar
 
 GitHub uses no `<md-bold>` elements and no `aria-label` on toolbar buttons.
-Buttons are `<button data-md-button="bold">` inside `<div class="ActionBar-item">`
-within `<action-bar>`, labelled by a sibling `<tool-tip>` through
-`aria-labelledby`. Consequences encoded in the script:
+Buttons are `<button data-md-button="bold">` inside
+`<div class="ActionBar-item">` within `<action-bar>`, labelled by a sibling
+`<tool-tip>` through `aria-labelledby`. Consequences encoded in the script:
 
 - `ANCHOR` finds the Bold button; everything else is located relative to it.
 - `buildItem` clones a whole `.ActionBar-item` to inherit GitHub's markup and
@@ -66,9 +68,9 @@ Config is one `GM_setValue` key, `layout`: an ordered array of `{id, on}`.
 Separators are entries with `id === SEPARATOR` (`"|"`) whose position is their
 only identity, so they need no ids and any number can exist.
 
-- `readLayout` reads a container's current order; `reconcile` drops entries whose
-  button has gone and appends ones GitHub has added, so a saved layout survives
-  GitHub changing the toolbar.
+- `readLayout` reads a container's current order; `reconcile` drops entries
+  whose button has gone and appends ones GitHub has added, so a saved layout
+  survives GitHub changing the toolbar.
 - `defaultLayout` is captured on the first `inject` pass **before anything is
   moved**, which is what Reset restores. It is deliberately never stored: a
   reload always re-renders GitHub's own order, so the snapshot cannot go stale.

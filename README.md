@@ -9,7 +9,10 @@ every button already on it.
 | Dedent  | Strips the longest leading-whitespace prefix common to every non-blank line. Refuses to guess when tabs and spaces are mixed. |
 | Details | Wraps the text in a `<details>` box with a placeholder `<summary>`, left selected so you can type straight over it.           |
 
-Unwrap is the main feature: GitHub renders single newlines as line breaks, so text wrapped at 80 columns reads badly in a comment. Unwrap leaves code fences, headings, tables, thematic breaks, explicit hard breaks and list structure alone, and unwraps wrapped list items and blockquotes correctly.
+Unwrap is the main feature: GitHub renders single newlines as line breaks, so
+text wrapped at 80 columns reads badly in a comment. Unwrap leaves code fences,
+headings, tables, thematic breaks, explicit hard breaks and list structure
+alone, and unwraps wrapped list items and blockquotes correctly.
 
 Each button works on the selection, or on the whole comment box when nothing is
 selected. Edits go through the browser's own insert-text path, so undo still
@@ -81,8 +84,8 @@ change.
 - Reordering uses HTML5 drag and drop, which needs a mouse. There is no
   touch-friendly way to move a row.
 - Needs a manager with synchronous `GM_getValue`, which means Tampermonkey or
-  Violentmonkey. Greasemonkey's `GM.getValue` is promise-based and will not
-  work unchanged.
+  Violentmonkey. Greasemonkey's `GM.getValue` is promise-based and will not work
+  unchanged.
 
 ## License
 
