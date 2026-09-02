@@ -11,6 +11,8 @@ button already on it.
 | Alerts    | Wraps the text in a [GitHub alert](https://docs.github.com/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts), quoting every line. One button per kind: Note, Tip, Important, Warning, Caution. |
 | Configure | Opens the settings panel described below.                                                                                                                                                                                                                                    |
 
+https://github.com/user-attachments/assets/271c9fcc-7a62-4c1e-b409-9bc1460a02a5
+
 Unwrap is the main feature: GitHub renders single newlines as line breaks, so
 text wrapped at 80 columns reads badly in a comment. Unwrap leaves code fences,
 headings, tables, thematic breaks, explicit hard breaks and list structure
