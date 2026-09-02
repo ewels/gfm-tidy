@@ -56,7 +56,7 @@ window.gfmTest = (() => {
   // Both fixtures carry the same buttons, so both must produce this. That is
   // the point: the toolbar has to be identical whichever editor drew it.
   const EXPECTED_ORDER =
-    "QUOTE CODE LINK | LIST_ORDERED LIST_UNORDERED TASKLIST | " +
+    "QUOTE LINK | LIST_ORDERED LIST_UNORDERED TASKLIST | " +
     "REPLY DIFF_IGNORED | UNWRAP DEDENT DETAILS | " +
     "ALERT_NOTE ALERT_WARNING | CONFIG";
 

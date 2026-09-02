@@ -156,7 +156,8 @@
       off("cross-reference"),
       true,
     );
-    t.check("Code left alone", off("code"), false);
+    t.check("Code hidden on a fresh install", off("code"), true);
+    t.check("Link left alone", off("link"), false);
 
     const run = (key, value, start, end) => {
       ta.value = value;

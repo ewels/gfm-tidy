@@ -226,6 +226,24 @@
       "false",
     );
 
+    // A GitHub button that DEFAULT_ORDER does not name must join GitHub's own
+    // group, not land after ours. Review comment boxes really do carry one.
+    const extra = document.createElement("button");
+    extra.innerHTML =
+      '<svg class="octicon octicon-shield" viewBox="0 0 16 16"><path d="M8 2z"/></svg>';
+    bar.appendChild(extra);
+    await t.settle();
+    const order = t.shown(bar).split(" ");
+    t.check(
+      "an unlisted button joins GitHub's group",
+      order.indexOf("SHIELD") > -1 &&
+        order.indexOf("SHIELD") < order.indexOf("UNWRAP"),
+      true,
+    );
+    t.check("and does not land last", order[order.length - 1], "CONFIG");
+    extra.remove();
+    await t.settle();
+
     t.check(
       "no duplicates after a re-render",
       document.querySelectorAll("button[data-gfm-tidy]").length,

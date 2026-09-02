@@ -25,9 +25,10 @@ anything inside a code fence are all left alone.
 Only Note and Warning are shown to begin with. Tip, Important and Caution ship
 switched off, and can be turned on in the settings panel.
 
-A fresh install also hides GitHub's own Heading, Bold, Italic, Mention and
-Reference buttons — the first three have quicker keyboard shortcuts, and the
-toolbar is crowded. Every one of them is a click away in the panel.
+A fresh install also hides seven of GitHub's own buttons: Heading, Bold, Italic,
+Code, Mention, Reference and Attach files. The first four have quicker keyboard
+shortcuts, and the toolbar is crowded enough to wrap onto a second row
+otherwise. Every one of them is a click away in the panel.
 
 Each formatting button works on the selection, or on the whole comment box when
 nothing is selected; with an empty box an alert button gives you the empty

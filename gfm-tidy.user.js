@@ -212,6 +212,7 @@
   // the live toolbar, so only the prose lives here; an unrecognised button just
   // shows no description rather than breaking the panel.
   const DESCRIPTIONS = {
+    FILE_DIFF: "Suggest a change to these lines.",
     COPILOT: "Ask Copilot to draft or summarise.",
     HEADING: "Turn the current line into a heading.",
     BOLD: "Bold the selected text.",
@@ -290,8 +291,10 @@
     "HEADING",
     "BOLD",
     "ITALIC",
+    "CODE",
     "MENTION",
     "CROSS_REFERENCE",
+    "PAPERCLIP",
   ];
 
   // Buttons that ship switched off: they exist in the layout so the panel can
@@ -311,6 +314,7 @@
   // and a toolbar should not depend on which page you happen to be on.
   // Anything live but unlisted is appended, so a new GitHub button still shows.
   const DEFAULT_ORDER = [
+    "FILE_DIFF", // "Add a suggestion", on review comments only
     "COPILOT",
     SEPARATOR,
     "HEADING",
@@ -525,8 +529,17 @@
       .filter((e) => e.id === SEPARATOR || buttons.has(e.id))
       .map((e) => ({ ...e })); // copies: pruneSeparators mutates `on`
     const listed = new Set(out.map((e) => e.id));
+
+    // A button GitHub has added that DEFAULT_ORDER does not name belongs at
+    // the end of GitHub's own buttons, not after ours — so back up over the
+    // separator that introduces our group.
+    let at = out.findIndex((e) => OURS.has(e.id));
+    if (at < 0) at = out.length;
+    else while (at > 0 && out[at - 1].id === SEPARATOR) at--;
+
     for (const action of buttons.keys()) {
-      if (!listed.has(action)) out.push({ id: action, on: defaultOn(action) });
+      if (listed.has(action)) continue;
+      out.splice(at++, 0, { id: action, on: defaultOn(action) });
     }
     return out;
   }
