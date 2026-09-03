@@ -1,4 +1,4 @@
-# gfm-tidy
+# <img src="docs/images/gfm-tidy_icon.svg" width="32" align="top" alt=""> gfm-tidy
 
 Extra buttons for the GitHub markdown toolbar, and control over which of
 GitHub's own buttons you keep. Works on issues, pull requests, review comments
