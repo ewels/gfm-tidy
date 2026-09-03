@@ -39,7 +39,7 @@ https://github.com/user-attachments/assets/271c9fcc-7a62-4c1e-b409-9bc1460a02a5
    scripts**. Manifest V3 requires this for every userscript manager, and
    nothing runs without it.
 3. Open
-   [`gfm-tidy.user.js`](https://raw.githubusercontent.com/ewels/gfm-tidy/main/gfm-tidy.user.js)
+   [`gfm-tidy.user.js`](https://github.com/ewels/gfm-tidy/releases/latest/download/gfm-tidy.user.js)
    and confirm the install prompt. Updates are automatic.
 
 ## Defaults

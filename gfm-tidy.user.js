@@ -13,8 +13,8 @@
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @run-at       document-idle
-// @downloadURL  https://raw.githubusercontent.com/ewels/gfm-tidy/main/gfm-tidy.user.js
-// @updateURL    https://raw.githubusercontent.com/ewels/gfm-tidy/main/gfm-tidy.user.js
+// @downloadURL  https://github.com/ewels/gfm-tidy/releases/latest/download/gfm-tidy.user.js
+// @updateURL    https://github.com/ewels/gfm-tidy/releases/latest/download/gfm-tidy.user.js
 // ==/UserScript==
 
 (function () {
