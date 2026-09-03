@@ -4,6 +4,7 @@
 // @version      1.0.0
 // @description  Unwrap, dedent, <details> and GitHub alert buttons for the markdown toolbar, and reorder or hide any button on it
 // @author       Phil Ewels
+// @icon         https://raw.githubusercontent.com/ewels/gfm-tidy/main/docs/images/gfm-tidy_icon.svg
 // @license      MIT
 // @match        https://github.com/*
 // @homepageURL  https://github.com/ewels/gfm-tidy
