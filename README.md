@@ -17,17 +17,19 @@ This extension adds a button to fix those things. And more.
 
 ## Buttons
 
-| Button        | What it does                                                                                                                                                                                                                        |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unwrap**    | Joins hard-wrapped lines into full-length paragraphs, and frees commit hashes from backticks.                                                                                                                                       |
-| **Dedent**    | Strips the leading whitespace common to every line. Refuses to guess on mixed tabs and spaces.                                                                                                                                      |
-| **Details**   | Wraps the text in a `<details>` box, with the `<summary>` placeholder selected so you can type over it.                                                                                                                             |
-| **Alerts**    | One button per [GitHub alert](https://docs.github.com/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts) kind: Note, Tip, Important, Warning, Caution. |
-| **Configure** | Opens the settings panel, where you can show/hide and reorder toolbar buttons (including native GitHub).                                                                                                                            |
+| Button            | What it does                                                                                                                                                                                                                        |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unwrap**        | Joins hard-wrapped lines into full-length paragraphs, and frees commit hashes from backticks.                                                                                                                                       |
+| **Dedent**        | Strips the leading whitespace common to every line. Refuses to guess on mixed tabs and spaces.                                                                                                                                      |
+| **Details**       | Wraps the text in a `<details>` box, with the `<summary>` placeholder selected so you can type over it.                                                                                                                             |
+| **Alerts**        | One button per [GitHub alert](https://docs.github.com/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts) kind: Note, Tip, Important, Warning, Caution. |
+| **Strikethrough** | Wraps the selection in `~~`, or unwraps it if it is already struck through. Off by default.                                                                                                                                         |
+| **Configure**     | Opens the settings panel, where you can show/hide and reorder toolbar buttons (including native GitHub).                                                                                                                            |
 
 Unwrap, Dedent and Details act on the selection, or on the whole comment box
 when nothing is selected. Alerts insert an empty alert at the caret or wrap
-selected text. Undo works as you'd expect.
+selected text, and Strikethrough does the same with `~` markers. Undo works as
+you'd expect.
 
 https://github.com/user-attachments/assets/271c9fcc-7a62-4c1e-b409-9bc1460a02a5
 
@@ -50,6 +52,7 @@ Hidden on a fresh install, each one click away in the panel:
   first four have quicker keyboard shortcuts, and the toolbar wraps onto a
   second row otherwise.
 - The Tip, Important and Caution alerts.
+- Strikethrough.
 
 These apply only to a layout you have never customised.
 

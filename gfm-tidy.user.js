@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GFM Tidy
 // @namespace    https://github.com/ewels/gfm-tidy
-// @version      1.0.0
+// @version      1.1.0
 // @description  Unwrap, dedent, <details> and GitHub alert buttons for the markdown toolbar, and reorder or hide any button on it
 // @author       Phil Ewels
 // @icon         https://raw.githubusercontent.com/ewels/gfm-tidy/main/docs/images/gfm-tidy_icon.svg
@@ -148,6 +148,46 @@
     };
   }
 
+  // A run of lines already struck through: the tildes sit inside any
+  // surrounding whitespace, since GFM ignores a tilde followed by a space.
+  const STRUCK = /^(\s*)~([\s\S]*)~(\s*)$/;
+  const UNSTRUCK = /^(\s*)([\s\S]*?)(\s*)$/;
+
+  // Wrap the selection in strikethrough, or unwrap it if it already is. One
+  // tilde, not two: GitHub renders both and one is less markup. The markers
+  // are inline, so they cannot span a blank line — each contiguous run of
+  // lines gets its own pair.
+  function strikeWrap(text, before = "", after = "") {
+    if (!text) return { text: "~~", selectionStart: 1, selectionEnd: 1 };
+
+    // The selection sits inside a pair of tildes without including them:
+    // take those away rather than adding a second pair around them.
+    if (before.endsWith("~") && after.startsWith("~"))
+      return { text, eat: 1, selectionStart: 0, selectionEnd: text.length };
+
+    const runs = [];
+    for (const line of text.split("\n")) {
+      const blank = BLANK.test(line);
+      const last = runs[runs.length - 1];
+      if (last && last.blank === blank) last.lines.push(line);
+      else runs.push({ blank, lines: [line] });
+    }
+    const parts = runs.map((run) => run.lines.join("\n"));
+    // Only unwrap when every run is struck through; a half-struck selection
+    // is a wrap, or the button could never finish the job.
+    const strip = runs.every((run, i) => run.blank || STRUCK.test(parts[i]));
+    return parts
+      .map((part, i) =>
+        runs[i].blank
+          ? part
+          : part.replace(
+              strip ? STRUCK : UNSTRUCK,
+              strip ? "$1$2$3" : "$1~$2~$3",
+            ),
+      )
+      .join("\n");
+  }
+
   // ---------------------------------------------------------------- dom layer
 
   const MARK = "data-gfm-tidy";
@@ -232,6 +272,7 @@
     UNWRAP: "Join hard-wrapped lines into full-length paragraphs.",
     DEDENT: "Strip the indentation shared by every line.",
     DETAILS: "Wrap the selection in a collapsible box.",
+    STRIKETHROUGH: "Strike through the selected text.",
     CONFIG: "Open this settings panel.",
     [SEPARATOR]: "",
     ...Object.fromEntries(
@@ -247,6 +288,15 @@
   const SEP_ICON = "M7.25 1.5h1.5v13h-1.5z";
 
   const BUTTONS = [
+    {
+      key: "STRIKETHROUGH",
+      placed: true, // DEFAULT_ORDER puts it among GitHub's inline buttons
+      label: "Strikethrough",
+      off: true,
+      insert: true, // nothing selected means empty markers, not the whole box
+      icon: "M11.055 8.5c.524.536.815 1.257.811 2.007a3.133 3.133 0 0 1-1.12 2.408C9.948 13.597 8.748 14 7.096 14c-1.706 0-3.104-.607-3.902-1.377a.751.751 0 0 1 1.042-1.079c.48.463 1.487.956 2.86.956 1.422 0 2.232-.346 2.676-.726.435-.372.594-.839.594-1.267 0-.472-.208-.857-.647-1.197-.448-.346-1.116-.623-1.951-.81H1.75a.75.75 0 0 1 0-1.5h12.5a.75.75 0 0 1 0 1.5ZM7.581 3.25c-2.036 0-2.778 1.082-2.778 1.786 0 .055.002.107.006.157a.75.75 0 0 1-1.496.114 3.506 3.506 0 0 1-.01-.271c0-1.832 1.75-3.286 4.278-3.286 1.418 0 2.721.58 3.514 1.093a.75.75 0 1 1-.814 1.26c-.64-.414-1.662-.853-2.7-.853Z",
+      fn: strikeWrap,
+    },
     {
       key: "UNWRAP",
       separatorBefore: true,
@@ -324,6 +374,7 @@
     "HEADING",
     "BOLD",
     "ITALIC",
+    "STRIKETHROUGH",
     "QUOTE",
     "CODE",
     "LINK",
@@ -337,7 +388,8 @@
     "CROSS_REFERENCE",
     "REPLY",
     "DIFF_IGNORED",
-    ...BUTTONS.flatMap((spec) =>
+    // `placed` entries are listed above instead of appended here.
+    ...BUTTONS.filter((spec) => !spec.placed).flatMap((spec) =>
       spec.separatorBefore ? [SEPARATOR, spec.key] : [spec.key],
     ),
   ];
@@ -870,9 +922,21 @@
       end = ta.value.length;
     }
     const source = ta.value.slice(start, end);
-    const result = spec.fn(source);
+    const result = spec.fn(
+      source,
+      ta.value.slice(0, start),
+      ta.value.slice(end),
+    );
     const out = typeof result === "string" ? { text: result } : result;
-    if (out.text === source) return;
+    if (out.text === source && !out.eat) return;
+
+    // A transform can ask to swallow the characters either side of the
+    // selection, which is how strikethrough drops tildes it was handed
+    // between rather than inside.
+    if (out.eat) {
+      start -= out.eat;
+      end += out.eat;
+    }
 
     // A block construct needs a blank line either side of it, or GitHub folds
     // it into the paragraph it lands against.
@@ -1016,5 +1080,5 @@
   }
 
   if (typeof module !== "undefined")
-    module.exports = { unwrap, dedent, detailsWrap, alertWrap };
+    module.exports = { unwrap, dedent, detailsWrap, alertWrap, strikeWrap };
 })();

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0] - 2026-09-07
+
+### Added
+
+- **Strikethrough** button: wraps the selection in `~~`, or unwraps it if it is
+  already struck through. Hidden on a fresh install, since the tilde is only
+  awkward to type on some keyboard layouts.
+  ([#1](https://github.com/ewels/gfm-tidy/issues/1))
+
 ## [1.0.0] - 2026-09-03
 
 First release.
@@ -23,4 +32,5 @@ First release.
   on each.
 - Edits go through the native undo stack, so Cmd/Ctrl+Z works as expected.
 
+[1.1.0]: https://github.com/ewels/gfm-tidy/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ewels/gfm-tidy/releases/tag/v1.0.0
