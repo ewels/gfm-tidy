@@ -213,6 +213,24 @@
       "~one~\n\n~two~",
     );
 
+    // A part-line selection grows out to the whole lines it touches. Only
+    // block constructs do this; strikethrough is inline and must not.
+    t.check(
+      "details never cuts a line in two",
+      run("DETAILS", "one two\nthree four", 4, 13),
+      "<details>\n<summary>Details</summary>\n\none two\nthree four\n\n</details>\n",
+    );
+    t.check(
+      "alert never cuts a line in two",
+      run("ALERT_NOTE", "one two", 4, 7),
+      "> [!NOTE]\n> one two\n",
+    );
+    t.check(
+      "strikethrough still marks just the selection",
+      run("STRIKETHROUGH", "one two", 4, 7),
+      "one ~two~",
+    );
+
     run("DETAILS", "body", 0, 4);
     t.check(
       "details leaves the summary selected",

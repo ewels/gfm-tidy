@@ -9,6 +9,12 @@
   awkward to type on some keyboard layouts.
   ([#1](https://github.com/ewels/gfm-tidy/issues/1))
 
+### Fixed
+
+- **Details** and the **Alert** buttons now wrap whole lines: a selection that
+  starts or ends mid-line grows out to the line boundaries instead of cutting
+  the line in two ([#2](https://github.com/ewels/gfm-tidy/issues/2)).
+
 ## [1.0.0] - 2026-09-03
 
 First release.

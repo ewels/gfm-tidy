@@ -921,6 +921,21 @@
       start = 0;
       end = ta.value.length;
     }
+    // A block construct wraps whole lines, so grow a partial selection out to
+    // the line boundaries either side rather than cutting a line in two. A
+    // bare caret only moves to the start of its line: an empty alert still
+    // inserts, it just lands above the line instead of inside it.
+    if (spec.block) {
+      const collapsed = start === end;
+      start = ta.value.lastIndexOf("\n", start - 1) + 1;
+      if (collapsed) {
+        end = start;
+      } else {
+        const nl = ta.value.indexOf("\n", end);
+        end = nl === -1 ? ta.value.length : nl;
+      }
+    }
+
     const source = ta.value.slice(start, end);
     const result = spec.fn(
       source,
