@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Strikethrough** button: wraps the selection in `~~`, or unwraps it if it is
+- **Strikethrough** button: wraps the selection in `~`, or unwraps it if it is
   already struck through. Hidden on a fresh install, since the tilde is only
   awkward to type on some keyboard layouts.
   ([#1](https://github.com/ewels/gfm-tidy/issues/1))
