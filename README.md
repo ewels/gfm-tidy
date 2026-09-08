@@ -1,8 +1,12 @@
 # <img src="docs/images/gfm-tidy_icon.svg" width="32" align="top" alt=""> gfm-tidy
 
-Extra buttons for the GitHub markdown toolbar, and control over which of
-GitHub's own buttons you keep. Works on issues, pull requests, review comments
-and discussions.
+![Greasy Fork Version](https://img.shields.io/greasyfork/v/594126)
+[![Greasy Fork installs](https://img.shields.io/greasyfork/dt/594126?logo=greasyfork&label=installs)](https://greasyfork.org/scripts/594126-gfm-tidy)
+![GitHub License](https://img.shields.io/github/license/ewels/gfm-tidy)
+
+**A browser _user script_ to add extra buttons to the GitHub markdown toolbar**,
+and control over which of GitHub's own buttons you keep. Works on issues, pull
+requests, review comments and discussions.
 
 AI agents often write annoying GitHub issues, PR descriptions and comments:
 
@@ -40,9 +44,11 @@ https://github.com/user-attachments/assets/271c9fcc-7a62-4c1e-b409-9bc1460a02a5
 2. In Chrome, open the extension's details page and turn on **Allow user
    scripts**. Manifest V3 requires this for every userscript manager, and
    nothing runs without it.
-3. Open
-   [`gfm-tidy.user.js`](https://github.com/ewels/gfm-tidy/releases/latest/download/gfm-tidy.user.js)
-   and confirm the install prompt. Updates are automatic.
+3. Install from [Greasy Fork](https://greasyfork.org/scripts/594126-gfm-tidy)
+   and confirm the prompt. Updates are automatic.
+   - If you prefer, you can copy + paste the
+     [`gfm-tidy.user.js` script](https://github.com/ewels/gfm-tidy/releases/latest/download/gfm-tidy.user.js)
+     from the GitHub release yourself.
 
 ## Defaults
 
