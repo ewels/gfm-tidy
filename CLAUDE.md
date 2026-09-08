@@ -5,7 +5,7 @@ code in this repository.
 
 ## What this is
 
-A single-file userscript (`gfm-tidy.user.js`) that adds nine buttons to GitHub's
+A single-file userscript (`gfm-tidy.user.js`) that adds ten buttons to GitHub's
 markdown comment toolbar (unwrap, dedent, wrap in `<details>`) and lets the user
 reorder or hide every button on that toolbar. No build step, no dependencies.
 

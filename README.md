@@ -23,7 +23,7 @@ This extension adds a button to fix those things. And more.
 | **Dedent**        | Strips the leading whitespace common to every line. Refuses to guess on mixed tabs and spaces.                                                                                                                                      |
 | **Details**       | Wraps the text in a `<details>` box, with the `<summary>` placeholder selected so you can type over it.                                                                                                                             |
 | **Alerts**        | One button per [GitHub alert](https://docs.github.com/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts) kind: Note, Tip, Important, Warning, Caution. |
-| **Strikethrough** | Wraps the selection in `~~`, or unwraps it if it is already struck through. Off by default.                                                                                                                                         |
+| **Strikethrough** | Wraps the selection in `~`, or unwraps it if it is already struck through. Off by default.                                                                                                                                          |
 | **Configure**     | Opens the settings panel, where you can show/hide and reorder toolbar buttons (including native GitHub).                                                                                                                            |
 
 Unwrap, Dedent and Details act on the selection, or on the whole comment box
