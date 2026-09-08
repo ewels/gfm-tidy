@@ -147,9 +147,9 @@
     const ta = document.getElementById("ta");
 
     t.check(
-      "nine buttons injected",
+      "one button injected per spec",
       document.querySelectorAll("button[data-gfm-tidy]").length,
-      9,
+      10,
     );
     t.check(
       "the hidden markdown-toolbar decoy was not used",
@@ -275,7 +275,7 @@
     t.check(
       "no duplicates after a re-render",
       document.querySelectorAll("button[data-gfm-tidy]").length,
-      9,
+      10, // one per BUTTONS spec
     );
     t.check("order stable after a re-render", t.shown(bar), t.EXPECTED_ORDER);
     t.report();

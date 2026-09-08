@@ -96,9 +96,9 @@
     const ours = (key) => document.querySelector(`[data-gfm-tidy="${key}"]`);
 
     t.check(
-      "nine buttons injected",
+      "one button injected per spec",
       document.querySelectorAll("button[data-gfm-tidy]").length,
-      9,
+      10,
     );
     t.check(
       "container is managed",
@@ -200,6 +200,19 @@
       "para\n\n<details>\n<summary>Details</summary>\n\nmore\n\n</details>\n",
     );
 
+    // Selecting the word inside a struck pair without the tildes: the click
+    // has to remove them, not add a second pair around them.
+    t.check(
+      "strikethrough drops tildes outside the selection",
+      run("STRIKETHROUGH", "a ~word~ b", 3, 7),
+      "a word b",
+    );
+    t.check(
+      "strikethrough marks each paragraph on its own",
+      run("STRIKETHROUGH", "one\n\ntwo", 0, 8),
+      "~one~\n\n~two~",
+    );
+
     run("DETAILS", "body", 0, 4);
     t.check(
       "details leaves the summary selected",
@@ -211,7 +224,7 @@
     t.check(
       "no duplicates after a re-render",
       document.querySelectorAll("button[data-gfm-tidy]").length,
-      9,
+      10, // one per BUTTONS spec
     );
     t.check("order stable after a re-render", t.shown(bar), t.EXPECTED_ORDER);
     t.report();

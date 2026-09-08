@@ -5,6 +5,7 @@ const {
   dedent,
   detailsWrap,
   alertWrap,
+  strikeWrap,
 } = require("../gfm-tidy.user.js");
 
 const eq = (name, got, want) => {
@@ -219,6 +220,44 @@ eq(
   "uses the kind it was built with",
   alertWrap("WARNING")("x").text,
   "> [!WARNING]\n> x\n",
+);
+
+// -------------------------------------------------------------- strikeWrap
+
+eq("wraps the selection", strikeWrap("gone"), "~gone~");
+eq("unwraps text already struck", strikeWrap("~gone~"), "gone");
+eq("spans a soft line break", strikeWrap("one\ntwo"), "~one\ntwo~");
+eq(
+  "gives each paragraph its own markers, as blank lines end a span",
+  strikeWrap("one\n\ntwo"),
+  "~one~\n\n~two~",
+);
+eq(
+  "unwraps every paragraph of a struck selection",
+  strikeWrap("~one~\n\n~two~"),
+  "one\n\ntwo",
+);
+eq(
+  "wraps when only some of the selection is struck",
+  strikeWrap("~one~\n\ntwo"),
+  "~~one~~\n\n~two~",
+);
+eq(
+  "keeps the markers inside surrounding whitespace",
+  strikeWrap("  - a\n  - b  "),
+  "  ~- a\n  - b~  ",
+);
+eq(
+  "with nothing selected leaves the caret between the markers",
+  strikeWrap("").text + " " + strikeWrap("").selectionStart,
+  "~~ 1",
+);
+// The word is selected but the tildes around it are not: adding another pair
+// would strike nothing, so take theirs away instead.
+eq(
+  "drops the tildes it was handed between",
+  JSON.stringify(strikeWrap("word", "a ~", "~ b")),
+  JSON.stringify({ text: "word", eat: 1, selectionStart: 0, selectionEnd: 4 }),
 );
 
 console.log("all tests passed");

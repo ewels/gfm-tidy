@@ -33,12 +33,13 @@ userscript managers compare that field against `@updateURL`.
 
 Two layers inside one IIFE, split at the `// dom layer` comment:
 
-**Transforms** (`unwrap`, `dedent`, `detailsWrap`, `alertWrap`) are pure string
-functions and the only tested code. `unwrap` classifies each line via the
-regexes at the top and joins it to the previous one only when both `startsBlock`
-and `endsBlock` allow it — that pair is what protects code fences, tables,
-headings, hard breaks and list structure. It also frees backticked commit hashes
-(`HASH_SPAN`), done inside the loop's fence check so code blocks keep theirs.
+**Transforms** (`unwrap`, `dedent`, `detailsWrap`, `alertWrap`, `strikeWrap`)
+are pure string functions and the only tested code. `unwrap` classifies each
+line via the regexes at the top and joins it to the previous one only when both
+`startsBlock` and `endsBlock` allow it — that pair is what protects code fences,
+tables, headings, hard breaks and list structure. It also frees backticked
+commit hashes (`HASH_SPAN`), done inside the loop's fence check so code blocks
+keep theirs.
 
 **DOM layer** injects the buttons and owns the toolbar's layout.
 
